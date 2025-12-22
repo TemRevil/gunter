@@ -11,8 +11,10 @@ import LoginScreen from './components/LoginScreen';
 import EndSessionModal from './components/EndSessionModal';
 import Toast from './components/Toast';
 import ConfirmDialog from './components/ConfirmDialog';
+import AdminAuthModal from './components/AdminAuthModal';
 import Modal from './components/Modal';
 import { Menu, Lock } from 'lucide-react';
+import { useEffect } from 'react';
 
 function App() {
     const {
@@ -25,8 +27,9 @@ function App() {
     const [isMobileShow, setIsMobileShow] = useState(false);
     const [isEndSessionOpen, setIsEndSessionOpen] = useState(false);
 
-    const [showSettingsAuth, setShowSettingsAuth] = useState(false);
-    const [settingsPassInput, setSettingsPassInput] = useState('');
+    useEffect(() => {
+        document.documentElement.lang = settings.language || 'ar';
+    }, [settings.language]);
 
     const renderTabContent = () => {
         switch (currentTab) {
@@ -41,23 +44,14 @@ function App() {
 
     const handleTabChange = (tab) => {
         if (tab === 'settings') {
-            setShowSettingsAuth(true);
+            window.requestAdminAuth?.(() => {
+                setCurrentTab('settings');
+                setIsMobileShow(false);
+            }, settings.language === 'ar' ? 'تأكيد الهوية للوصول للإعدادات' : 'Identity confirmation to access settings');
             return;
         }
         setCurrentTab(tab);
         setIsMobileShow(false);
-    };
-
-    const handleSettingsAuth = (e) => {
-        e.preventDefault();
-        if (settingsPassInput === settings.adminPassword) {
-            setShowSettingsAuth(false);
-            setSettingsPassInput('');
-            setCurrentTab('settings');
-            setIsMobileShow(false);
-        } else {
-            window.showToast?.('كلمة مرور المدير غير صحيحة', 'danger');
-        }
     };
 
     // Global Wrapper to ensure Toast/Confirm are always available
@@ -65,22 +59,23 @@ function App() {
         <div key={settings.theme} data-theme={settings.theme}>
             <Toast />
             <ConfirmDialog />
+            <AdminAuthModal />
 
             {!isLicensed() ? (
                 <LicenseScreen onActivate={(code) => {
                     if (activateLicense(code)) {
-                        window.showToast?.('تم تنشيط النظام بنجاح', 'success');
+                        window.showToast?.(settings.language === 'ar' ? 'تم تنشيط النظام بنجاح' : 'System activated successfully', 'success');
                     } else {
-                        window.showToast?.('كود التنشيط غير صحيح!', 'danger');
+                        window.showToast?.(settings.language === 'ar' ? 'كود التنشيط غير صحيح!' : 'Invalid activation code!', 'danger');
                     }
                 }} />
             ) : !isLoggedIn ? (
                 <LoginScreen onLogin={(pass) => {
                     if (pass === settings.loginPassword) {
                         setIsLoggedIn(true);
-                        window.showToast?.('تم تسجيل الدخول بنجاح', 'success');
+                        window.showToast?.(settings.language === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', 'success');
                     } else {
-                        window.showToast?.('كلمة المرور غير صحيحة!', 'danger');
+                        window.showToast?.(settings.language === 'ar' ? 'كلمة مرور غير صحيحة!' : 'Incorrect password!', 'danger');
                     }
                 }} />
             ) : (
@@ -129,19 +124,10 @@ function App() {
                             setIsLoggedIn(false);
                         }}
                     />
+                </div>
+            )}
+        </div>
+    );
+}
 
-                    <Modal
-                        show={showSettingsAuth}
-                        onClose={() => setShowSettingsAuth(false)}
-                        title="التحقق من الهوية"
-                    >
-                        <form onSubmit={handleSettingsAuth}>
-                            <div className="form-group">
-                                <label>كلمة مرور المدير للوصول للإعدادات</label>
-                                <div style={{ position: 'relative' }}>
-                                    <input
-                                        type="password"
-                                        required
-                                        autoFocus
-                                        value={settingsPassInput}
-                              
+export default App;

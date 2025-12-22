@@ -3,7 +3,7 @@ import { Bell, Trash2, Info, AlertTriangle, XCircle, CheckCircle } from 'lucide-
 import { StoreContext } from '../store/StoreContext';
 
 const Notifications = () => {
-    const { notifications, clearNotifications } = useContext(StoreContext);
+    const { notifications, clearNotifications, settings, t } = useContext(StoreContext);
 
     const getIcon = (type) => {
         switch (type) {
@@ -22,13 +22,13 @@ const Notifications = () => {
                         <Bell size={24} />
                     </div>
                     <div>
-                        <h1>مركز التنبيهات</h1>
-                        <p>تنبيهات النظام ومراقبة المخزون</p>
+                        <h1>{t('notifications')}</h1>
+                        <p>{settings.language === 'ar' ? 'تنبيهات النظام ومراقبة المخزون' : 'System alerts and inventory monitoring'}</p>
                     </div>
                 </div>
                 <div className="view-actions">
                     <button className="btn btn-secondary" onClick={clearNotifications} disabled={notifications.length === 0}>
-                        <Trash2 size={18} /> مسح الكل
+                        <Trash2 size={18} /> {t('clearAll')}
                     </button>
                 </div>
             </header>
@@ -49,7 +49,7 @@ const Notifications = () => {
                 ) : (
                     <div className="empty-state">
                         <Bell size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
-                        <p>لا توجد تنبيهات حالياً</p>
+                        <p>{t('noNotifications')}</p>
                     </div>
                 )}
             </div>

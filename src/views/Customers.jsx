@@ -1,16 +1,18 @@
 import React, { useState, useContext } from 'react';
 import {
     Users, Search, Plus, Phone, MapPin,
-    UserPlus, Clock, Printer, Trash2, PenTool
+    UserPlus, Clock, Printer, Trash2, PenTool, Coins, History
 } from 'lucide-react';
 import { StoreContext } from '../store/StoreContext';
 import Modal from '../components/Modal';
 import DropdownMenu from '../components/DropdownMenu';
+import CustomerForm from '../components/CustomerForm';
 
 const Customers = () => {
     const {
-        customers, operations, deleteCustomer,
-        addCustomer, updateCustomer
+        customers, operations, transactions, deleteCustomer,
+        addCustomer, updateCustomer, recordDirectTransaction,
+        deleteTransaction, settings, t
     } = useContext(StoreContext);
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -20,37 +22,33 @@ const Customers = () => {
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [customerForm, setCustomerForm] = useState({ id: '', name: '', phone: '', address: '' });
+    const [directTx, setDirectTx] = useState({ amount: '', type: 'payment', note: '' });
 
     const filteredCustomers = customers.filter(customer =>
         customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         customer.phone.includes(searchTerm)
     );
 
-    const handleNumericInput = (val) => {
-        const cleaned = val.replace(/[^0-9]/g, '');
-        setCustomerForm(prev => ({ ...prev, phone: cleaned }));
-    };
 
-    const handleFormSubmit = (e) => {
-        e.preventDefault();
+    const handleFormSubmit = (data) => {
         if (isEditMode) {
-            updateCustomer(customerForm.id, {
-                name: customerForm.name,
-                phone: customerForm.phone,
-                address: customerForm.address
+            updateCustomer(data.id, {
+                name: data.name,
+                phone: data.phone,
+                address: data.address,
+                balance: data.balance
             });
             window.showToast?.('تم تحديث بيانات العميل', 'success');
         } else {
-            addCustomer(customerForm);
+            addCustomer(data);
             window.showToast?.('تم إضافة العميل بنجاح', 'success');
         }
-        setCustomerForm({ id: '', name: '', phone: '', address: '' });
         setShowFormModal(false);
     };
 
     const openAdd = () => {
         setIsEditMode(false);
-        setCustomerForm({ id: '', name: '', phone: '', address: '' });
+        setCustomerForm({ id: '', name: '', phone: '', address: '', balance: '0' });
         setShowFormModal(true);
     };
 
@@ -60,7 +58,8 @@ const Customers = () => {
             id: customer.id,
             name: customer.name,
             phone: customer.phone || '',
-            address: customer.address || ''
+            address: customer.address || '',
+            balance: String(customer.balance || 0)
         });
         setShowFormModal(true);
     };
@@ -70,9 +69,42 @@ const Customers = () => {
         setShowHistoryModal(true);
     };
 
-    const customerOps = selectedCustomer
-        ? operations.filter(op => op.customerId === selectedCustomer.id)
-        : [];
+    const handleDirectTxSubmit = (e) => {
+        e.preventDefault();
+        if (!selectedCustomer) return;
+
+        const performAdd = () => {
+            const msg = directTx.type === 'payment' ? 'تسديد دين / دفع مبلغ' : 'زيادة مديونية / سحب مبلغ';
+            recordDirectTransaction(selectedCustomer.id, directTx.amount, directTx.type, directTx.note || msg);
+            window.showToast?.('تم تسجيل العملية بنجاح', 'success');
+            setDirectTx({ amount: '', type: 'payment', note: '' });
+        };
+
+        if (settings?.security?.authOnAddTransaction) {
+            window.requestAdminAuth?.(performAdd, settings.language === 'ar' ? 'تأكيد الهوية لتسجيل عملة دفع / دين' : 'Identity confirmation to record payment/debt');
+        } else {
+            performAdd();
+        }
+    };
+
+    const combinedHistory = selectedCustomer ? [
+        ...operations.filter(op => op.customerId === selectedCustomer.id).map(op => ({
+            id: op.id,
+            timestamp: op.timestamp,
+            label: `${op.partName} x ${op.quantity}`,
+            amount: op.price,
+            paid: op.paidAmount,
+            source: 'operation'
+        })),
+        ...transactions.filter(tx => tx.customerId === selectedCustomer.id).map(tx => ({
+            id: tx.id,
+            timestamp: tx.timestamp,
+            label: tx.note,
+            amount: tx.type === 'debt' ? tx.amount : 0,
+            paid: tx.type === 'payment' ? tx.amount : 0,
+            source: 'transaction'
+        }))
+    ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)) : [];
 
     return (
         <div className="view-container">
@@ -82,8 +114,8 @@ const Customers = () => {
                         <Users size={24} />
                     </div>
                     <div>
-                        <h1>العملاء</h1>
-                        <p>إدارة بيانات العملاء والتعاملات</p>
+                        <h1>{t('customers')}</h1>
+                        <p>{settings.language === 'ar' ? 'إدارة بيانات العملاء والتعاملات' : 'Manage customer data and transactions'}</p>
                     </div>
                 </div>
                 <div className="view-actions">
@@ -91,13 +123,13 @@ const Customers = () => {
                         <Search className="search-icon" size={18} />
                         <input
                             type="text"
-                            placeholder="بحث عن عميل..."
+                            placeholder={t('search')}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
                     <button className="btn btn-primary" onClick={openAdd}>
-                        <UserPlus size={18} /> عميل جديد
+                        <UserPlus size={18} /> {t('addCustomer')}
                     </button>
                 </div>
             </header>
@@ -106,11 +138,11 @@ const Customers = () => {
                 <table className="data-table">
                     <thead>
                         <tr>
-                            <th style={{ width: '25%' }}>الاسم</th>
-                            <th style={{ width: '20%' }}>رقم الهاتف</th>
-                            <th style={{ width: '30%' }}>العنوان</th>
-                            <th style={{ width: '15%' }}>الرصيد/الدين</th>
-                            <th style={{ width: '10%', textAlign: 'center' }}>العمليات</th>
+                            <th style={{ width: '25%' }}>{t('customerName')}</th>
+                            <th style={{ width: '20%' }}>{t('phone')}</th>
+                            <th style={{ width: '30%' }}>{t('address')}</th>
+                            <th style={{ width: '15%', textAlign: 'center' }}>{t('balance')}</th>
+                            <th style={{ width: '10%', textAlign: 'center' }}>{t('actions')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -132,35 +164,43 @@ const Customers = () => {
                                     <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                             <MapPin size={14} className="text-secondary" />
-                                            <span style={{ fontSize: '0.9rem' }}>{customer.address || '-'}</span>
+                                            <span style={{ fontSize: 'var(--fs-sm)' }}>{customer.address || '-'}</span>
                                         </div>
                                     </td>
-                                    <td>
+                                    <td style={{ textAlign: 'center' }}>
                                         <span className={`badge ${(customer.balance || 0) > 0 ? 'danger' : 'success'}`}>
-                                            {(customer.balance || 0).toLocaleString()} {(customer.balance || 0) > 0 ? '(دين)' : ''}
+                                            {(customer.balance || 0).toLocaleString()} {(customer.balance || 0) > 0 ? `(${t('debt')})` : ''}
                                         </span>
                                     </td>
                                     <td>
                                         <DropdownMenu options={[
                                             {
-                                                label: 'السجل والديون',
+                                                label: t('history'),
                                                 icon: <Clock size={16} />,
                                                 onClick: () => openHistory(customer)
                                             },
                                             {
-                                                label: 'تعديل البيانات',
+                                                label: t('edit'),
                                                 icon: <PenTool size={16} />,
                                                 onClick: () => openEdit(customer)
                                             },
                                             {
-                                                label: 'حذف العميل',
+                                                label: t('delete'),
                                                 icon: <Trash2 size={16} />,
                                                 className: 'danger',
                                                 onClick: () => {
-                                                    window.customConfirm?.('تأكيد الحذف', `هل أنت متأكد من حذف العميل "${customer.name}"؟ سيتم حذف جميع تعاملاته أيضاً.`, () => {
-                                                        deleteCustomer(customer.id);
-                                                        window.showToast?.('تم حذف العميل', 'success');
-                                                    });
+                                                    const performDelete = () => {
+                                                        window.customConfirm?.(t('delete'), `${t('delete')} "${customer.name}"؟`, () => {
+                                                            deleteCustomer(customer.id);
+                                                            window.showToast?.(t('delete'), 'success');
+                                                        });
+                                                    };
+
+                                                    if (settings?.security?.authOnDeleteCustomer) {
+                                                        window.requestAdminAuth?.(performDelete, settings.language === 'ar' ? 'تأكيد الهوية لحذف العميل' : 'Identity confirmation to delete customer');
+                                                    } else {
+                                                        performDelete();
+                                                    }
                                                 }
                                             }
                                         ]} />
@@ -170,7 +210,7 @@ const Customers = () => {
                         ) : (
                             <tr>
                                 <td colSpan="5" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-                                    لا يوجد عملاء مطابقين للبحث
+                                    {t('noCustomers')}
                                 </td>
                             </tr>
                         )}
@@ -182,88 +222,133 @@ const Customers = () => {
             <Modal
                 show={showFormModal}
                 onClose={() => setShowFormModal(false)}
-                title={isEditMode ? "تعديل بيانات العميل" : "إضافة عميل جديد"}
+                title={isEditMode ? t('updateCustomer') : t('addCustomer')}
             >
-                <form onSubmit={handleFormSubmit}>
-                    <div className="form-group">
-                        <label>اسم العميل</label>
-                        <input
-                            type="text"
-                            required
-                            value={customerForm.name}
-                            onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })}
-                            placeholder="أدخل اسم العميل"
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label>رقم الهاتف</label>
-                        <input
-                            type="text"
-                            value={customerForm.phone}
-                            onChange={(e) => handleNumericInput(e.target.value)}
-                            placeholder="01xxxxxxxxx"
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label>العنوان</label>
-                        <textarea
-                            value={customerForm.address}
-                            onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })}
-                            placeholder="أدخل العنوان بالتفصيل"
-                            style={{
-                                width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-sm)',
-                                border: '1px solid var(--border-color)', background: 'var(--bg-input)',
-                                color: 'var(--text-primary)', minHeight: '100px', fontFamily: 'inherit'
-                            }}
-                        />
-                    </div>
-                    <div className="modal-footer" style={{ border: 'none', padding: 0, marginTop: '1.5rem' }}>
-                        <button type="button" className="btn btn-secondary" onClick={() => setShowFormModal(false)}>إلغاء</button>
-                        <button type="submit" className="btn btn-primary">{isEditMode ? "حفظ التعديلات" : "حفظ العميل"}</button>
-                    </div>
-                </form>
+                <CustomerForm
+                    initialData={customerForm}
+                    isEditMode={isEditMode}
+                    onSubmit={handleFormSubmit}
+                    onCancel={() => setShowFormModal(false)}
+                />
             </Modal>
 
             {/* History Modal */}
             <Modal
                 show={showHistoryModal}
                 onClose={() => setShowHistoryModal(false)}
-                title={`سجل تعاملات: ${selectedCustomer?.name}`}
+                title={`${t('history')}: ${selectedCustomer?.name}`}
+                style={{ maxWidth: '800px' }}
             >
-                <div className="summary-box" style={{ background: 'var(--bg-input)', padding: '1rem', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem', border: '1px solid var(--border-color)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 600 }}>إجمالي المديونية الحالية:</span>
-                        <span style={{ fontSize: '1.5rem', fontWeight: 800, color: (selectedCustomer?.balance || 0) > 0 ? 'var(--danger-color)' : 'var(--success-color)' }}>
-                            {(selectedCustomer?.balance || 0).toLocaleString()}
-                        </span>
-                    </div>
-                </div>
+                {(() => {
+                    const currentCust = customers.find(c => c.id === selectedCustomer?.id);
+                    const bal = currentCust?.balance || 0;
+                    return (
+                        <div className="summary-box" style={{ background: 'var(--bg-input)', padding: '1rem', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem', border: '1px solid var(--border-color)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontWeight: 600 }}>{settings.language === 'ar' ? 'إجمالي المديونية الحالية:' : 'Total Current Debt:'}</span>
+                                <span style={{ fontSize: 'var(--fs-h2)', fontWeight: 800, color: bal > 0 ? 'var(--danger-color)' : 'var(--success-color)' }}>
+                                    {Math.abs(bal).toLocaleString()}
+                                </span>
+                            </div>
+                        </div>
+                    );
+                })()}
 
-                <div className="table-container" style={{ maxHeight: '400px' }}>
+                <div className="table-container" style={{ maxHeight: '350px', marginBottom: '1.5rem', overflowY: 'auto' }}>
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>التاريخ</th>
-                                <th>البيان</th>
-                                <th>المبلغ</th>
-                                <th>المدفوع</th>
+                                <th style={{ width: '22%' }}>{t('date')}</th>
+                                <th style={{ width: '40%' }}>{t('notes')}</th>
+                                <th style={{ width: '19%', textAlign: 'center' }}>{t('total')}</th>
+                                <th style={{ width: '19%', textAlign: 'center' }}>{t('paid')}</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {customerOps.length > 0 ? customerOps.map(op => (
-                                <tr key={op.id}>
-                                    <td style={{ fontSize: '0.8rem', opacity: 0.7 }}>{new Date(op.timestamp).toLocaleDateString('ar-EG')}</td>
-                                    <td className="font-medium">{op.partName} x {op.quantity}</td>
-                                    <td>{op.price.toLocaleString()}</td>
-                                    <td className="text-success font-medium">{op.paidAmount.toLocaleString()}</td>
+                            {combinedHistory.length > 0 ? combinedHistory.map(item => (
+                                <tr key={item.id}>
+                                    <td style={{ fontSize: 'var(--fs-xs)', opacity: 0.7 }}>{new Date(item.timestamp).toLocaleDateString()}</td>
+                                    <td className="font-medium" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        {item.label}
+                                        {item.source === 'transaction' && (
+                                            <button
+                                                className="btn-icon text-danger"
+                                                style={{ padding: '4px' }}
+                                                onClick={() => {
+                                                    const performDelete = () => {
+                                                        window.customConfirm?.(t('delete'), `${t('delete')} ${t('addTransaction')}?`, () => {
+                                                            deleteTransaction(item.id);
+                                                            window.showToast?.(t('delete'), 'success');
+                                                        });
+                                                    };
+
+                                                    if (settings?.security?.authOnDeleteTransaction) {
+                                                        window.requestAdminAuth?.(performDelete, settings.language === 'ar' ? 'تأكيد الهوية لحذف سجل الدفع / الدين' : 'Identity confirmation to delete payment/debt record');
+                                                    } else {
+                                                        performDelete();
+                                                    }
+                                                }}
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
+                                    </td>
+                                    <td style={{ color: item.amount > 0 ? 'var(--danger-color)' : 'inherit', textAlign: 'center' }}>{item.amount > 0 ? item.amount.toLocaleString() : '-'}</td>
+                                    <td style={{ color: item.paid > 0 ? 'var(--success-color)' : 'inherit', textAlign: 'center' }} className="font-medium">{item.paid > 0 ? item.paid.toLocaleString() : '-'}</td>
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan="4" style={{ textAlign: 'center', padding: '2rem', opacity: 0.5 }}>لا توجد تعاملات مسجلة لهذا العميل</td>
+                                    <td colSpan="4" style={{ textAlign: 'center', padding: '2rem', opacity: 0.5 }}>{t('noOperations')}</td>
                                 </tr>
                             )}
                         </tbody>
                     </table>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
+                    <h3 style={{ fontSize: 'var(--fs-h3)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Coins size={20} className="text-accent" /> {t('addTransaction')}
+                    </h3>
+                    <form onSubmit={handleDirectTxSubmit}>
+                        <div className="settings-button-grid" style={{ marginBottom: '1rem' }}>
+                            <div className="form-group">
+                                <label style={{ fontSize: 'var(--fs-sm)' }}>{t('amount')}</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={directTx.amount}
+                                    onChange={(e) => {
+                                        const val = e.target.value.replace(/[^0-9]/g, '');
+                                        setDirectTx({ ...directTx, amount: val });
+                                    }}
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label style={{ fontSize: 'var(--fs-sm)' }}>{t('status')}</label>
+                                <select
+                                    value={directTx.type}
+                                    onChange={(e) => setDirectTx({ ...directTx, type: e.target.value })}
+                                    style={{ cursor: 'pointer' }}
+                                >
+                                    <option value="payment">{t('payment')}</option>
+                                    <option value="debt">{t('debt')}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="form-group">
+                            <label style={{ fontSize: 'var(--fs-sm)' }}>{t('notes')}</label>
+                            <input
+                                type="text"
+                                value={directTx.note}
+                                onChange={(e) => setDirectTx({ ...directTx, note: e.target.value })}
+                                placeholder={t('notes')}
+                            />
+                        </div>
+                        <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', borderRadius: 'var(--radius-md)' }}>
+                            {t('save')}
+                        </button>
+                    </form>
                 </div>
             </Modal>
         </div>

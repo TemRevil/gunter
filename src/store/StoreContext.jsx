@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { translations } from '../utils/translations';
 
 const StoreContext = createContext();
 
@@ -12,15 +13,27 @@ const defaultData = {
     transactions: [],
     settings: {
         theme: 'dark',
-        loginPassword: '1',
-        adminPassword: '1',
+        loginPassword: '0',
+        adminPassword: '0',
         receipt: {
             title: 'اسم المركز / المحل',
             address: 'العنوان بالتفصيل',
             phone: '01000000000',
             footer: 'شكراً لزيارتكم!'
         },
-        license: null
+        license: null,
+        language: 'ar',
+        security: {
+            showSessionBalance: true,
+            authOnDeleteOperation: true,
+            authOnDeleteCustomer: true,
+            authOnDeletePart: true,
+            authOnDeleteTransaction: true,
+            authOnAddTransaction: false,
+            authOnAddPart: false,
+            authOnUpdatePart: false,
+            authOnAddOperation: false
+        }
     }
 };
 
@@ -30,7 +43,28 @@ export const StoreProvider = ({ children }) => {
         if (stored) {
             try {
                 const parsed = JSON.parse(stored);
-                return { ...defaultData, ...parsed };
+                const finalSettings = {
+                    ...defaultData.settings,
+                    ...(parsed.settings || {}),
+                    security: {
+                        ...defaultData.settings.security,
+                        ...(parsed.settings?.security || {})
+                    }
+                };
+
+                // Forced migration: if password is the old default '1' or '123456', move it to '0'
+                if (finalSettings.loginPassword === '1' || finalSettings.loginPassword === '123456') {
+                    finalSettings.loginPassword = '0';
+                }
+                if (finalSettings.adminPassword === '1' || finalSettings.adminPassword === '123456') {
+                    finalSettings.adminPassword = '0';
+                }
+
+                return {
+                    ...defaultData,
+                    ...parsed,
+                    settings: finalSettings
+                };
             } catch (e) {
                 return defaultData;
             }
@@ -151,7 +185,13 @@ export const StoreProvider = ({ children }) => {
                 customers: updatedCustomers
             };
         });
-        addNotification(`تم حذف عملية بيع لم يتم استرجاع قيمتها بالكامل`, 'warning');
+
+        const opDetail = data.operations.find(o => o.id === id);
+        if (opDetail) {
+            addNotification(`تم حذف عملية: ${opDetail.partName} للعميل ${opDetail.customerName}`, 'warning');
+        } else {
+            addNotification(`تم حذف عملية بيع لم يتم استرجاع قيمتها بالكامل`, 'warning');
+        }
     };
 
     const addPart = (part) => {
@@ -184,6 +224,53 @@ export const StoreProvider = ({ children }) => {
         }));
     };
 
+    const recordDirectTransaction = (customerId, amount, type, note) => {
+        const tx = {
+            id: generateId(),
+            customerId,
+            amount: parseFloat(amount) || 0,
+            type, // 'payment' (customer paid me) or 'debt' (customer took debt)
+            note,
+            timestamp: new Date().toISOString()
+        };
+
+        setData(prev => {
+            // If payment: balance decreases (he owes less)
+            // If debt: balance increases (he owes more)
+            const balanceChange = (type === 'payment') ? -tx.amount : tx.amount;
+
+            const updatedCustomers = prev.customers.map(c =>
+                c.id === customerId ? { ...c, balance: (c.balance || 0) + balanceChange } : c
+            );
+
+            return {
+                ...prev,
+                transactions: [...(prev.transactions || []), tx],
+                customers: updatedCustomers
+            };
+        });
+    };
+
+    const deleteTransaction = (id) => {
+        setData(prev => {
+            const tx = (prev.transactions || []).find(t => t.id === id);
+            if (!tx) return prev;
+
+            // Reverse balance change
+            const balanceChange = (tx.type === 'payment') ? tx.amount : -tx.amount;
+
+            const updatedCustomers = prev.customers.map(c =>
+                c.id === tx.customerId ? { ...c, balance: (c.balance || 0) + balanceChange } : c
+            );
+
+            return {
+                ...prev,
+                transactions: prev.transactions.filter(t => t.id !== id),
+                customers: updatedCustomers
+            };
+        });
+    };
+
     const deleteCustomer = (id) => {
         setData(prev => ({ ...prev, customers: prev.customers.filter(c => c.id !== id) }));
     };
@@ -200,6 +287,32 @@ export const StoreProvider = ({ children }) => {
             ...prev,
             settings: { ...prev.settings, receipt }
         }));
+    };
+
+    const getDailyCollectedTotal = () => {
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // 1. Paid amounts from operations today (Cash IN)
+        const opsTotal = (data.operations || []).reduce((acc, op) => {
+            if (op.timestamp && op.timestamp.startsWith(todayStr)) {
+                return acc + (parseFloat(op.paidAmount) || 0);
+            }
+            return acc;
+        }, 0);
+
+        // 2. Direct transactions today (Cash IN / OUT)
+        const txTotal = (data.transactions || []).reduce((acc, tx) => {
+            if (tx.timestamp && tx.timestamp.startsWith(todayStr)) {
+                if (tx.type === 'payment') {
+                    return acc + (parseFloat(tx.amount) || 0); // Customer paid the shop
+                } else if (tx.type === 'debt') {
+                    return acc - (parseFloat(tx.amount) || 0); // Shop gave cash/value to customer
+                }
+            }
+            return acc;
+        }, 0);
+
+        return opsTotal + txTotal;
     };
 
     const exportData = () => {
@@ -236,19 +349,27 @@ export const StoreProvider = ({ children }) => {
         addCustomer,
         updateCustomer,
         deleteCustomer,
+        deleteTransaction,
         addNotification,
         clearNotifications,
         toggleTheme,
         updateReceiptSettings,
+        getDailyCollectedTotal,
         exportData,
         importData,
         setData,
+        recordDirectTransaction,
         // Short hands for convenience
         operations: data.operations,
+        transactions: data.transactions || [],
         parts: data.parts,
         customers: data.customers,
         notifications: data.notifications,
-        settings: data.settings
+        settings: data.settings,
+        t: (key) => {
+            const lang = data.settings.language || 'ar';
+            return translations[lang][key] || key;
+        }
     };
 
     return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

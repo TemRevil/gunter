@@ -1,21 +1,46 @@
 import React from 'react';
-import { CalendarCheck, Boxes, Users, Bell, Settings, Power } from 'lucide-react';
+import { CalendarCheck, Boxes, Users, Bell, Settings, Power, Wallet } from 'lucide-react';
+import { useStore } from '../store/StoreContext';
 
 const Sidebar = ({ currentTab, setTab, onLogout, notificationsCount, isMobileShow }) => {
+    const { getDailyCollectedTotal, settings, t } = useStore();
+    const dailyTotal = getDailyCollectedTotal();
+    const showBalance = settings?.security?.showSessionBalance ?? true;
     const menuItems = [
-        { id: 'operations', label: 'العمليات', icon: CalendarCheck },
-        { id: 'storage', label: 'المخزن', icon: Boxes },
-        { id: 'customers', label: 'العملاء', icon: Users },
-        { id: 'notifications', label: 'التنبيهات', icon: Bell, badge: notificationsCount },
-        { id: 'settings', label: 'الإعدادات', icon: Settings },
+        { id: 'operations', label: t('operations'), icon: CalendarCheck },
+        { id: 'storage', label: t('storage'), icon: Boxes },
+        { id: 'customers', label: t('customers'), icon: Users },
+        { id: 'notifications', label: t('notifications'), icon: Bell, badge: notificationsCount },
+        { id: 'settings', label: t('settings'), icon: Settings },
     ];
 
     return (
         <aside className={`sidebar ${isMobileShow ? 'show' : ''}`}>
             <div className="brand">
-                <i className="fa-solid fa-gears" style={{ fontSize: '2rem' }}></i>
-                <h2>الميكانيكي</h2>
+                <i className="fa-solid fa-gears" style={{ fontSize: 'var(--fs-h2)' }}></i>
+                <h2>{t('appName')}</h2>
             </div>
+
+            {showBalance && (
+                <div className="session-summary" style={{
+                    margin: '0 0.5rem 1.5rem',
+                    padding: '1rem',
+                    background: 'rgba(52, 211, 153, 0.1)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid rgba(52, 211, 153, 0.2)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.25rem'
+                }}>
+                    <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--success-color)', fontWeight: 700, opacity: 0.8 }}>{t('dailyBalance')}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Wallet size={16} className="text-success" />
+                        <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 800, color: 'var(--text-primary)' }}>
+                            {dailyTotal.toLocaleString()}
+                        </span>
+                    </div>
+                </div>
+            )}
             <nav>
                 <ul className="nav-links">
                     {menuItems.map(item => (
@@ -34,7 +59,7 @@ const Sidebar = ({ currentTab, setTab, onLogout, notificationsCount, isMobileSho
                     <li className="nav-logout" onClick={onLogout}>
                         <div className="nav-item-group">
                             <Power size={20} />
-                            <span>إغلاق اليومية</span>
+                            <span>{t('logout')}</span>
                         </div>
                     </li>
                 </ul>

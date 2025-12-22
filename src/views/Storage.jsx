@@ -3,9 +3,10 @@ import { Boxes, Search, Plus, Trash2, PenTool, AlertTriangle, Hash, DollarSign }
 import { StoreContext } from '../store/StoreContext';
 import Modal from '../components/Modal';
 import DropdownMenu from '../components/DropdownMenu';
+import PartForm from '../components/PartForm';
 
 const Storage = () => {
-    const { parts, addPart, updatePart, deletePart } = useContext(StoreContext);
+    const { parts, addPart, updatePart, deletePart, settings, t } = useContext(StoreContext);
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editMode, setEditMode] = useState(false);
@@ -14,13 +15,7 @@ const Storage = () => {
     const [showStockModal, setShowStockModal] = useState(false);
     const [stockAmount, setStockAmount] = useState('0');
 
-    const [formData, setFormData] = useState({
-        name: '',
-        code: '',
-        quantity: '0',
-        price: '0',
-        threshold: '5'
-    });
+    const [formData, setFormData] = useState(null); // Used primarily for selected data in modals
 
     const filteredParts = parts.filter(p =>
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -68,14 +63,7 @@ const Storage = () => {
         setShowStockModal(false);
     };
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        const data = {
-            ...formData,
-            quantity: parseInt(formData.quantity) || 0,
-            price: parseFloat(formData.price) || 0,
-            threshold: parseInt(formData.threshold) || 5
-        };
+    const handleSubmit = (data) => {
         if (editMode) {
             updatePart(selectedId, data);
             window.showToast?.('تم تعديل القطعة بنجاح', 'success');
@@ -94,8 +82,8 @@ const Storage = () => {
                         <Boxes size={24} />
                     </div>
                     <div>
-                        <h1>المخزن</h1>
-                        <p>إدارة قطع الغيار والمخزون</p>
+                        <h1>{t('storage')}</h1>
+                        <p>{settings.language === 'ar' ? 'إدارة قطع الغيار والمخزون' : 'Manage spare parts and inventory'}</p>
                     </div>
                 </div>
                 <div className="view-actions">
@@ -103,13 +91,19 @@ const Storage = () => {
                         <Search className="search-icon" size={18} />
                         <input
                             type="text"
-                            placeholder="بحث عن قطعة..."
+                            placeholder={t('search')}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <button className="btn btn-primary" onClick={handleOpenAdd}>
-                        <Plus size={18} /> إضافة قطعة
+                    <button className="btn btn-primary" onClick={() => {
+                        if (settings?.security?.authOnAddPart) {
+                            window.requestAdminAuth?.(handleOpenAdd, settings.language === 'ar' ? 'تأكيد الهوية لإضافة قطعة جديدة' : 'Identity confirmation to add new item');
+                        } else {
+                            handleOpenAdd();
+                        }
+                    }}>
+                        <Plus size={18} /> {t('addPart')}
                     </button>
                 </div>
             </header>
@@ -118,12 +112,12 @@ const Storage = () => {
                 <table className="data-table">
                     <thead>
                         <tr>
-                            <th style={{ width: '30%' }}>الاسم</th>
-                            <th style={{ width: '15%' }}>الكود</th>
-                            <th style={{ width: '15%' }}>الكمية</th>
-                            <th style={{ width: '15%' }}>السعر</th>
-                            <th style={{ width: '15%' }}>الحالة</th>
-                            <th style={{ width: '10%', textAlign: 'center' }}>العمليات</th>
+                            <th style={{ width: '30%' }}>{t('partName')}</th>
+                            <th style={{ width: '15%' }}>{settings.language === 'ar' ? 'الكود' : 'Code'}</th>
+                            <th style={{ width: '15%', textAlign: 'center' }}>{t('qty')}</th>
+                            <th style={{ width: '15%', textAlign: 'center' }}>{t('price')}</th>
+                            <th style={{ width: '15%', textAlign: 'center' }}>{t('status')}</th>
+                            <th style={{ width: '10%', textAlign: 'center' }}>{t('actions')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -133,40 +127,60 @@ const Storage = () => {
                                     <td className="font-medium">{part.name}</td>
                                     <td>{part.code || '-'}</td>
                                     <td style={{ textAlign: 'center' }}>{part.quantity}</td>
-                                    <td>{part.price.toLocaleString()}</td>
-                                    <td>
+                                    <td style={{ textAlign: 'center' }}>{part.price.toLocaleString()}</td>
+                                    <td style={{ textAlign: 'center' }}>
                                         {part.quantity <= (part.threshold || 5) && part.quantity > 0 ? (
                                             <span className="badge warning">
-                                                <AlertTriangle size={12} style={{ marginLeft: '4px' }} />
-                                                منخفض
+                                                <AlertTriangle size={12} style={{ [settings.language === 'ar' ? 'marginLeft' : 'marginRight']: '4px' }} />
+                                                {t('lowStock')}
                                             </span>
                                         ) : part.quantity === 0 ? (
-                                            <span className="badge danger">نفذ</span>
+                                            <span className="badge danger">{settings.language === 'ar' ? 'نفذ' : 'Out of Stock'}</span>
                                         ) : (
-                                            <span className="badge success">متوفر</span>
+                                            <span className="badge success">{settings.language === 'ar' ? 'متوفر' : 'In Stock'}</span>
                                         )}
                                     </td>
                                     <td>
                                         <DropdownMenu options={[
                                             {
-                                                label: 'تعديل البيانات',
+                                                label: t('edit'),
                                                 icon: <PenTool size={16} />,
-                                                onClick: () => handleOpenEdit(part)
+                                                onClick: () => {
+                                                    if (settings?.security?.authOnUpdatePart) {
+                                                        window.requestAdminAuth?.(() => handleOpenEdit(part), settings.language === 'ar' ? 'تأكيد الهوية لتعديل بيانات القطعة' : 'Identity confirmation to edit item info');
+                                                    } else {
+                                                        handleOpenEdit(part);
+                                                    }
+                                                }
                                             },
                                             {
-                                                label: 'إضافة مخزون',
+                                                label: settings.language === 'ar' ? 'إضافة مخزون' : 'Add Stock',
                                                 icon: <Plus size={16} />,
-                                                onClick: () => handleOpenStock(part)
+                                                onClick: () => {
+                                                    if (settings?.security?.authOnUpdatePart) {
+                                                        window.requestAdminAuth?.(() => handleOpenStock(part), settings.language === 'ar' ? 'تأكيد الهوية لإضافة مخزون' : 'Identity confirmation to add stock');
+                                                    } else {
+                                                        handleOpenStock(part);
+                                                    }
+                                                }
                                             },
                                             {
-                                                label: 'حذف من المخزن',
+                                                label: settings.language === 'ar' ? 'حذف من المخزن' : 'Delete Item',
                                                 icon: <Trash2 size={16} />,
                                                 className: 'danger',
                                                 onClick: () => {
-                                                    window.customConfirm?.('تأكيد الحذف', `هل أنت متأكد من حذف القطعة "${part.name}" نهائياً من المخزن؟`, () => {
-                                                        deletePart(part.id);
-                                                        window.showToast?.('تم حذف القطعة', 'success');
-                                                    });
+                                                    const performDelete = () => {
+                                                        window.customConfirm?.(t('delete'), `${t('delete')} "${part.name}"?`, () => {
+                                                            deletePart(part.id);
+                                                            window.showToast?.(t('delete'), 'success');
+                                                        });
+                                                    };
+
+                                                    if (settings?.security?.authOnDeletePart) {
+                                                        window.requestAdminAuth?.(performDelete, settings.language === 'ar' ? 'تأكيد الهوية لحذف قطعة من المخزن' : 'Identity confirmation to delete item');
+                                                    } else {
+                                                        performDelete();
+                                                    }
                                                 }
                                             }
                                         ]} />
@@ -188,93 +202,38 @@ const Storage = () => {
             <Modal
                 show={showModal}
                 onClose={() => setShowModal(false)}
-                title={editMode ? "تعديل بيانات قطعة" : "إضافة قطعة جديدة للمخزن"}
+                title={editMode ? t('updatePart') : t('addPart')}
             >
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label>اسم القطعة</label>
-                        <input
-                            type="text"
-                            required
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        />
-                    </div>
-
-                    <div className="form-group">
-                        <label>الكود (اختياري)</label>
-                        <div style={{ position: 'relative' }}>
-                            <input
-                                type="text"
-                                value={formData.code}
-                                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                            />
-                            <Hash size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
-                        </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                        <div className="form-group">
-                            <label>الكمية الحالية</label>
-                            <input
-                                type="text"
-                                required
-                                value={String(formData.quantity ?? '0')}
-                                onChange={(e) => handleNumericInput('quantity', e.target.value, false, setFormData)}
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label>سعر البيع</label>
-                            <div style={{ position: 'relative' }}>
-                                <input
-                                    type="text"
-                                    required
-                                    value={String(formData.price ?? '0')}
-                                    onChange={(e) => handleNumericInput('price', e.target.value, true, setFormData)}
-                                />
-                                <DollarSign size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="form-group">
-                        <label>تنبيه نقص المخزون عند وصول الكمية لـ</label>
-                        <input
-                            type="text"
-                            required
-                            value={String(formData.threshold ?? '5')}
-                            onChange={(e) => handleNumericInput('threshold', e.target.value, false, setFormData)}
-                        />
-                    </div>
-
-                    <div className="modal-footer" style={{ border: 'none', padding: 0, marginTop: '1.5rem' }}>
-                        <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>إلغاء</button>
-                        <button type="submit" className="btn btn-primary">{editMode ? "تعديل القطعة" : "إضافة للمخزن"}</button>
-                    </div>
-                </form>
+                <PartForm
+                    initialData={formData}
+                    isEditMode={editMode}
+                    onSubmit={handleSubmit}
+                    onCancel={() => setShowModal(false)}
+                />
             </Modal>
 
             {/* Quick Stock Modal */}
             <Modal
                 show={showStockModal}
                 onClose={() => setShowStockModal(false)}
-                title="تحديث كمية المخزون"
+                title={settings.language === 'ar' ? 'تحديث كمية المخزون' : 'Update Stock Quantity'}
             >
                 <form onSubmit={handleStockSubmit}>
                     <div className="form-group">
-                        <label>الكمية المراد إضافتها لـ {parts.find(p => p.id === selectedId)?.name}</label>
+                        <label>{(settings.language === 'ar' ? 'الكمية المراد إضافتها لـ ' : 'Quantity to add for ') + parts.find(p => p.id === selectedId)?.name}</label>
                         <input
                             type="text"
                             required
                             autoFocus
                             value={String(stockAmount ?? '0')}
                             onChange={(e) => handleNumericInput('stockAmount', e.target.value, false, setStockAmount)}
-                            placeholder="أدخل الكمية..."
+                            placeholder="0"
+                            style={{ [settings.language === 'ar' ? 'paddingRight' : 'paddingLeft']: '1rem' }}
                         />
                     </div>
                     <div className="modal-footer" style={{ border: 'none', padding: 0, marginTop: '1.5rem' }}>
-                        <button type="button" className="btn btn-secondary" onClick={() => setShowStockModal(false)}>إلغاء</button>
-                        <button type="submit" className="btn btn-primary">إضافة للمخزن</button>
+                        <button type="button" className="btn btn-secondary" onClick={() => setShowStockModal(false)}>{t('cancel')}</button>
+                        <button type="submit" className="btn btn-primary">{settings.language === 'ar' ? 'إضافة للمخزن' : 'Add to Stock'}</button>
                     </div>
                 </form>
             </Modal>
