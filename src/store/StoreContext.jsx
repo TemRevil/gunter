@@ -84,22 +84,71 @@ export const StoreProvider = ({ children }) => {
 
     const generateId = () => '_' + Math.random().toString(36).substr(2, 9);
 
-    const getValidLicenseCodes = () => [
-        'OEYySzQtTTlYN1EtUDFMNVYtUjNONlctVDBZOFo=',
-        'QzVIM0otRzlTMUQtSzdGNEEtTDBQMk8tQjZNOE4=',
-        'UTFMVzJFLVIzVDRZLVU1STZPLVA3QThTLUQ5RjBH',
-        'WjlYOEMtN1Y2QjUtTjRNM0stMkwxSjAtUTVXNEU=',
-        'UDBPOUktOFU3WTYtVDVSNEUtM1cyUTEtQTBaOVg='
-    ].map(c => atob(c));
+    const [isLicenseValid, setIsLicenseValid] = useState(false);
 
-    const isLicensed = () => !!data.settings.license && getValidLicenseCodes().includes(data.settings.license);
+    // SHA-256 Hashing Helper
+    const hashKey = async (key) => {
+        if (!key) return '';
+        const msgBuffer = new TextEncoder().encode(key.trim());
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    };
 
-    const activateLicense = (code) => {
-        setData(prev => ({
-            ...prev,
-            settings: { ...prev.settings, license: code }
-        }));
-        return getValidLicenseCodes().includes(code);
+    useEffect(() => {
+        const validateCurrentLicense = async () => {
+            if (!data.settings.license) {
+                setIsLicenseValid(false);
+                return;
+            }
+            try {
+                // Fetch from the raw GitHub URL
+                const response = await fetch('https://raw.githubusercontent.com/TemRevil/lack/master/vanilla-backup/act.txt');
+                if (response.ok) {
+                    const text = await response.text();
+                    const validHashes = text.split('\n').map(h => h.trim()); // Hashes in file
+                    const currentKeyHash = await hashKey(data.settings.license);
+
+                    if (validHashes.includes(currentKeyHash)) {
+                        setIsLicenseValid(true);
+                    } else {
+                        setIsLicenseValid(false);
+                        // Optional: Clear invalid license?
+                        // setData(prev => ({ ...prev, settings: { ...prev.settings, license: null } }));
+                    }
+                }
+            } catch (error) {
+                console.error("License validation failed:", error);
+                // On network error, maybe keep previous state or set false
+            }
+        };
+
+        validateCurrentLicense();
+    }, [data.settings.license]);
+
+    const isLicensed = () => isLicenseValid;
+
+    const activateLicense = async (code) => {
+        try {
+            const hash = await hashKey(code);
+            const response = await fetch('https://raw.githubusercontent.com/TemRevil/lack/master/vanilla-backup/act.txt');
+            if (!response.ok) return false;
+
+            const text = await response.text();
+            const validHashes = text.split('\n').map(h => h.trim());
+
+            if (validHashes.includes(hash)) {
+                setData(prev => ({
+                    ...prev,
+                    settings: { ...prev.settings, license: code }
+                }));
+                return true;
+            }
+            return false;
+        } catch (e) {
+            console.error("Activation error:", e);
+            return false;
+        }
     };
 
     const addNotification = (text, type = 'info') => {

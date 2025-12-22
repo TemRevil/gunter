@@ -62,8 +62,9 @@ function App() {
             <AdminAuthModal />
 
             {!isLicensed() ? (
-                <LicenseScreen onActivate={(code) => {
-                    if (activateLicense(code)) {
+                <LicenseScreen onActivate={async (code) => {
+                    const valid = await activateLicense(code);
+                    if (valid) {
                         window.showToast?.(settings.language === 'ar' ? 'تم تنشيط النظام بنجاح' : 'System activated successfully', 'success');
                     } else {
                         window.showToast?.(settings.language === 'ar' ? 'كود التنشيط غير صحيح!' : 'Invalid activation code!', 'danger');

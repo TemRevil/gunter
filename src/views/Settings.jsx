@@ -7,19 +7,18 @@ import {
 import { StoreContext } from '../store/StoreContext';
 
 const LicenseSection = ({ settings, setData, t }) => (
-    <section className="settings-section-card">
-        <header className="settings-section-header">
-            <div className="settings-section-icon security" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success-color)' }}>
-                <ShieldCheck size={24} />
+    <section className="settings-section-card" style={{ padding: '1.5rem', width: '100%', maxWidth: '600px', margin: '0 auto' }}>
+        <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
+            <div className="settings-section-icon security" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success-color)', width: '40px', height: '40px' }}>
+                <ShieldCheck size={20} />
             </div>
             <div>
-                <h3 style={{ margin: 0, fontSize: 'var(--fs-h3)' }}>{t('license')}</h3>
-                <p style={{ margin: 0, fontSize: 'var(--fs-sm)', opacity: 0.6 }}>{t('activationStatus')}</p>
+                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('license')}</h3>
             </div>
         </header>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div className="settings-item-row" style={{ cursor: 'default' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="settings-item-row" style={{ cursor: 'default', padding: '0.75rem' }}>
                 <div>
                     <span className="settings-item-label">{t('activationStatus')}</span>
                     <span className="settings-item-subtext" style={{ color: 'var(--success-color)', fontWeight: 700 }}>{t('activated')}</span>
@@ -29,11 +28,11 @@ const LicenseSection = ({ settings, setData, t }) => (
                 </div>
             </div>
 
-            <div className="password-box">
-                <div className="password-box-header">
-                    <span style={{ fontWeight: 700 }}>{t('activationKey')}</span>
+            <div className="password-box" style={{ padding: '1rem' }}>
+                <div className="password-box-header" style={{ marginBottom: '0.5rem' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{t('activationKey')}</span>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <input
                         type="text"
                         readOnly
@@ -61,12 +60,13 @@ const LicenseSection = ({ settings, setData, t }) => (
                             fontFamily: 'monospace',
                             letterSpacing: '2px',
                             fontWeight: 700,
-                            borderRadius: 'var(--radius-md)'
+                            borderRadius: 'var(--radius-md)',
+                            padding: '0.6rem'
                         }}
                     />
                     <button
                         className="btn btn-primary"
-                        style={{ borderRadius: 'var(--radius-md)' }}
+                        style={{ borderRadius: 'var(--radius-md)', padding: '0.6rem 1rem' }}
                         onClick={() => {
                             window.customConfirm?.(t('change'), t('changeKeyConfirm'), () => {
                                 setData(prev => ({
@@ -91,6 +91,7 @@ const Settings = () => {
         exportData, importData, setData, data, t
     } = useContext(StoreContext);
 
+    const [activeTab, setActiveTab] = useState('general');
 
     const handleReceiptUpdate = (e) => {
         e.preventDefault();
@@ -102,7 +103,7 @@ const Settings = () => {
             footer: fd.get('footer')
         };
         updateReceiptSettings(receipt);
-        window.showToast?.('تم حفظ إعدادات الوصل', 'success');
+        window.showToast?.(settings.language === 'ar' ? 'تم حفظ إعدادات الوصل' : 'Receipt settings saved', 'success');
     };
 
     const handlePasswordUpdate = (type, e) => {
@@ -113,7 +114,7 @@ const Settings = () => {
             settings: { ...prev.settings, [type]: pass }
         }));
         e.target.reset();
-        window.showToast?.('تم تغيير كلمة المرور بنجاح', 'success');
+        window.showToast?.(settings.language === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully', 'success');
     };
 
     const toggleSecurity = (key) => {
@@ -131,7 +132,6 @@ const Settings = () => {
 
     const SecurityCheckbox = ({ label, subtext, settingKey }) => {
         const isActive = settings?.security?.[settingKey] ?? false;
-
         return (
             <div className="settings-item-row" onClick={() => toggleSecurity(settingKey)}>
                 <div>
@@ -151,10 +151,10 @@ const Settings = () => {
         const reader = new FileReader();
         reader.onload = (re) => {
             if (importData(re.target.result)) {
-                window.showToast?.('تم استعادة البيانات بنجاح', 'success');
+                window.showToast?.(settings.language === 'ar' ? 'تم استعادة البيانات بنجاح' : 'Data restored successfully', 'success');
                 setTimeout(() => window.location.reload(), 1000);
             } else {
-                window.showToast?.('فشل في استيراد الملف', 'danger');
+                window.showToast?.(settings.language === 'ar' ? 'فشل في استيراد الملف' : 'Failed to import file', 'danger');
             }
         };
         reader.readAsText(file);
@@ -167,6 +167,243 @@ const Settings = () => {
         }));
     };
 
+    const tabs = [
+        { id: 'general', label: t('language') + ' & ' + t('darkMode'), icon: <Palette size={20} /> },
+        { id: 'security', label: t('securityPermissions'), icon: <ShieldAlert size={20} /> },
+        { id: 'receipt', label: t('receiptSettings'), icon: <FileText size={20} /> },
+        { id: 'data', label: t('backupAndDisplay'), icon: <Save size={20} /> },
+        { id: 'license', label: t('license'), icon: <ShieldCheck size={20} /> },
+    ];
+
+    const renderContent = () => {
+        switch (activeTab) {
+            case 'general':
+                return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+                        <section className="settings-section-card" style={{ padding: '1.5rem' }}>
+                            <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
+                                <div className="settings-section-icon appearance" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-color)', width: '40px', height: '40px' }}>
+                                    <Globe size={20} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('language')}</h3>
+                                </div>
+                            </header>
+                            <div className="settings-button-grid">
+                                <button
+                                    className={`btn ${settings.language === 'ar' ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => setLanguage('ar')}
+                                    style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)' }}
+                                >
+                                    العربية
+                                </button>
+                                <button
+                                    className={`btn ${settings.language === 'en' ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => setLanguage('en')}
+                                    style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)' }}
+                                >
+                                    English
+                                </button>
+                            </div>
+                        </section>
+
+                        <section className="settings-section-card" style={{ padding: '1.5rem' }}>
+                            <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
+                                <div className="settings-section-icon appearance" style={{ width: '40px', height: '40px' }}>
+                                    {settings.theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('darkMode')}</h3>
+                                </div>
+                            </header>
+                            <div className="settings-item-row" onClick={toggleTheme} style={{ padding: '0.75rem', marginBottom: '0.5rem' }}>
+                                <div>
+                                    <span className="settings-item-label">{settings.language === 'ar' ? 'الوضع الليلي' : 'Dark Mode'}</span>
+                                </div>
+                                <div className={`toggle-switch ${settings.theme === 'dark' ? 'active' : ''}`}>
+                                    <div className="toggle-knob" />
+                                </div>
+                            </div>
+                            <div className="settings-item-row" onClick={() => toggleSecurity('showSessionBalance')} style={{ padding: '0.75rem' }}>
+                                <div>
+                                    <span className="settings-item-label">{settings.language === 'ar' ? 'إظهار الرصيد اليومي' : 'Show Daily Balance'}</span>
+                                </div>
+                                <div className={`toggle-switch ${settings?.security?.showSessionBalance ? 'active' : ''}`}>
+                                    <div className="toggle-knob" />
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                );
+            case 'security':
+                return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
+                        <section className="settings-section-card" style={{ padding: '1.5rem' }}>
+                            <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
+                                <div className="settings-section-icon security" style={{ width: '40px', height: '40px' }}>
+                                    <ShieldAlert size={20} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('securityPermissions')}</h3>
+                                </div>
+                            </header>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                <div className="settings-item-subtext" style={{ fontWeight: 800, color: 'var(--accent-color)', marginBottom: '0.25rem', fontSize: '0.8rem' }}>{settings.language === 'ar' ? 'العمليات الأساسية' : 'Core Operations'}</div>
+                                <SecurityCheckbox label={t('deleteOperations')} settingKey="authOnDeleteOperation" />
+                                <SecurityCheckbox label={t('addOperations')} settingKey="authOnAddOperation" />
+
+                                <div className="settings-item-subtext" style={{ fontWeight: 800, color: 'var(--accent-color)', marginTop: '0.75rem', marginBottom: '0.25rem', fontSize: '0.8rem' }}>{settings.language === 'ar' ? 'إدارة المخزن' : 'Storage Management'}</div>
+                                <SecurityCheckbox label={t('deletePart')} settingKey="authOnDeletePart" />
+                                <SecurityCheckbox label={t('addPart')} settingKey="authOnAddPart" />
+                                <SecurityCheckbox label={t('editPart')} settingKey="authOnUpdatePart" />
+
+                                <div className="settings-item-subtext" style={{ fontWeight: 800, color: 'var(--accent-color)', marginTop: '0.75rem', marginBottom: '0.25rem', fontSize: '0.8rem' }}>{settings.language === 'ar' ? 'العملاء والمالية' : 'Customers & Finance'}</div>
+                                <SecurityCheckbox label={t('deleteCustomer')} settingKey="authOnDeleteCustomer" />
+                                <SecurityCheckbox label={t('addTransaction')} settingKey="authOnAddTransaction" />
+                                <SecurityCheckbox label={t('deleteTransaction')} settingKey="authOnDeleteTransaction" />
+                            </div>
+                        </section>
+
+                        <section className="settings-section-card" style={{ padding: '1.5rem' }}>
+                            <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
+                                <div className="settings-section-icon auth" style={{ width: '40px', height: '40px' }}>
+                                    <Key size={20} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('passwords')}</h3>
+                                </div>
+                            </header>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <div className="password-box" style={{ padding: '1rem' }}>
+                                    <div className="password-box-header" style={{ marginBottom: '0.5rem' }}>
+                                        <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{t('systemPassword')}</span>
+                                        <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>{t('current')}: <code style={{ color: 'var(--accent-color)' }}>{settings.loginPassword}</code></span>
+                                    </div>
+                                    <form onSubmit={(e) => handlePasswordUpdate('loginPassword', e)} style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <input type="text" name="password" placeholder={settings.language === 'ar' ? 'جديدة...' : 'New...'} required style={{ padding: '0.5rem 0.75rem', fontSize: '0.9rem' }} />
+                                        <button type="submit" className="btn btn-primary" style={{ borderRadius: 'var(--radius-md)', padding: '0.5rem 1rem' }}>{t('change')}</button>
+                                    </form>
+                                </div>
+
+                                <div className="password-box" style={{ padding: '1rem' }}>
+                                    <div className="password-box-header" style={{ marginBottom: '0.5rem' }}>
+                                        <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{t('adminPassword')}</span>
+                                        <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>{t('current')}: <code style={{ color: 'var(--accent-color)' }}>{settings.adminPassword}</code></span>
+                                    </div>
+                                    <form onSubmit={(e) => handlePasswordUpdate('adminPassword', e)} style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <input type="text" name="password" placeholder={settings.language === 'ar' ? 'جديدة...' : 'New...'} required style={{ padding: '0.5rem 0.75rem', fontSize: '0.9rem' }} />
+                                        <button type="submit" className="btn btn-primary" style={{ borderRadius: 'var(--radius-md)', padding: '0.5rem 1rem' }}>{t('change')}</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                );
+            case 'receipt':
+                return (
+                    <section className="settings-section-card" style={{ padding: '1.5rem', maxWidth: '600px', margin: '0 auto' }}>
+                        <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
+                            <div className="settings-section-icon receipt" style={{ width: '40px', height: '40px' }}>
+                                <FileBarChart size={20} />
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('receiptSettings')}</h3>
+                            </div>
+                        </header>
+
+                        <form onSubmit={handleReceiptUpdate}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label style={{ fontSize: '0.85rem' }}>{t('businessName')}</label>
+                                    <input type="text" name="title" defaultValue={settings.receipt.title || ''} required style={{ padding: '0.5rem 0.75rem' }} />
+                                </div>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label style={{ fontSize: '0.85rem' }}>{t('detailedAddress')}</label>
+                                    <input type="text" name="address" defaultValue={settings.receipt.address || ''} style={{ padding: '0.5rem 0.75rem' }} />
+                                </div>
+                                <div className="settings-button-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <div className="form-group" style={{ marginBottom: 0 }}>
+                                        <label style={{ fontSize: '0.85rem' }}>{t('phone')}</label>
+                                        <input type="text" name="phone" defaultValue={settings.receipt.phone || ''} style={{ padding: '0.5rem 0.75rem' }} />
+                                    </div>
+                                    <div className="form-group" style={{ marginBottom: 0 }}>
+                                        <label style={{ fontSize: '0.85rem' }}>{t('receiptFooter')}</label>
+                                        <input type="text" name="footer" defaultValue={settings.receipt.footer || ''} style={{ padding: '0.5rem 0.75rem' }} />
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.25rem' }}>
+                                <button type="submit" className="btn btn-primary" style={{ padding: '0.6rem 1.25rem', flex: 1 }}>
+                                    <Save size={16} /> {t('save')}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary receipt-preview-btn"
+                                    style={{ padding: '0.6rem 1rem' }}
+                                    onClick={() => {
+                                        const mockOp = {
+                                            id: 'PREVIEW',
+                                            timestamp: new Date().toISOString(),
+                                            customerName: 'Customer Preview',
+                                            partName: 'Part Preview',
+                                            quantity: 2,
+                                            price: 1500,
+                                            paidAmount: 1000,
+                                            paymentStatus: 'partial'
+                                        };
+                                        import('../utils/printing').then(m => m.printReceipt(mockOp, settings));
+                                    }}
+                                >
+                                    <Printer size={16} /> {t('preview')}
+                                </button>
+                            </div>
+                        </form>
+                    </section>
+                );
+            case 'data':
+                return (
+                    <section className="settings-section-card" style={{ padding: '1.5rem', maxWidth: '600px', margin: '0 auto' }}>
+                        <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
+                            <div className="settings-section-icon appearance" style={{ width: '40px', height: '40px' }}>
+                                <Save size={20} />
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('backupAndDisplay')}</h3>
+                            </div>
+                        </header>
+
+                        <div className="settings-button-grid" style={{ marginTop: '0.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <button className="btn btn-secondary shadow-sm" style={{ padding: '1.25rem', borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', height: '120px' }} onClick={() => {
+                                const now = new Date();
+                                const blob = new Blob([exportData()], { type: 'text/plain' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `backup_${now.toISOString().split('T')[0]}.txt`;
+                                a.click();
+                                window.showToast?.(settings.language === 'ar' ? 'جاري تصدير البيانات...' : 'Exporting data...', 'success');
+                            }}>
+                                <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '0.75rem', borderRadius: '50%', color: 'var(--accent-color)' }}><Download size={24} /></div>
+                                <span style={{ fontWeight: 700 }}>{t('exportData')}</span>
+                            </button>
+
+                            <label className="btn btn-secondary shadow-sm" style={{ padding: '1.25rem', borderRadius: 'var(--radius-lg)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', height: '120px' }}>
+                                <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '0.75rem', borderRadius: '50%', color: 'var(--success-color)' }}><Upload size={24} /></div>
+                                <span style={{ fontWeight: 700 }}>{t('importData')}</span>
+                                <input type="file" hidden onChange={onImport} />
+                            </label>
+                        </div>
+                    </section>
+                );
+            case 'license':
+                return <LicenseSection settings={settings} setData={setData} t={t} />;
+            default:
+                return null;
+        }
+    };
+
     return (
         <div className="view-container">
             <header className="view-header">
@@ -176,234 +413,60 @@ const Settings = () => {
                     </div>
                     <div>
                         <h1>{t('settings')}</h1>
-                        <p>{settings.language === 'ar' ? 'تخصيص الخيارات والأمان والحسابات' : 'Customize options, security and accounts'}</p>
+                        <p>{settings.language === 'ar' ? 'إدارة إعدادات النظام' : 'Manage system settings'}</p>
                     </div>
                 </div>
             </header>
 
-            <div className="settings-view">
-                <div className="settings-main-grid">
-                    {/* Right Column: Security (Longest) */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-                        <section className="settings-section-card" style={{ height: '100%' }}>
-                            <header className="settings-section-header">
-                                <div className="settings-section-icon security">
-                                    <ShieldAlert size={24} />
-                                </div>
-                                <div>
-                                    <h3 style={{ margin: 0, fontSize: 'var(--fs-h3)' }}>{t('securityPermissions')}</h3>
-                                    <p style={{ margin: 0, fontSize: 'var(--fs-sm)', opacity: 0.6 }}>{settings.language === 'ar' ? 'تحديد متى يطلب النظام التحقق من المدير' : 'Determine when the system requires manager verification'}</p>
-                                </div>
-                            </header>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <div className="settings-item-subtext" style={{ fontWeight: 800, color: 'var(--accent-color)', marginBottom: '0.25rem' }}>{settings.language === 'ar' ? 'العمليات الأساسية' : 'Core Operations'}</div>
-                                <SecurityCheckbox label={t('deleteOperations')} subtext={settings.language === 'ar' ? 'طلب كلمة المرور عند حذف أي عملية بيع' : 'Require password when deleting any sale'} settingKey="authOnDeleteOperation" />
-                                <SecurityCheckbox label={t('addOperations')} subtext={settings.language === 'ar' ? 'تأمين تسجيل أي فاتورة بيع جديدة' : 'Secure recording of any new sale invoice'} settingKey="authOnAddOperation" />
-
-                                <div className="settings-item-subtext" style={{ fontWeight: 800, color: 'var(--accent-color)', marginTop: '1rem', marginBottom: '0.25rem' }}>{settings.language === 'ar' ? 'إدارة المخزن' : 'Storage Management'}</div>
-                                <SecurityCheckbox label={t('deletePart')} subtext={settings.language === 'ar' ? 'منع حذف أي صنف من المخزن بدون إذن' : 'Prevent deleting any item from storage without permission'} settingKey="authOnDeletePart" />
-                                <SecurityCheckbox label={t('addPart')} subtext={settings.language === 'ar' ? 'طلب الرقم السري عند تسجيل صنف جديد' : 'Require PIN when registering a new item'} settingKey="authOnAddPart" />
-                                <SecurityCheckbox label={t('editPart')} subtext={settings.language === 'ar' ? 'تأمين تغيير بيانات القطع المتوفرة' : 'Secure changing of available items data'} settingKey="authOnUpdatePart" />
-
-                                <div className="settings-item-subtext" style={{ fontWeight: 800, color: 'var(--accent-color)', marginTop: '1rem', marginBottom: '0.25rem' }}>{settings.language === 'ar' ? 'العملاء والمالية' : 'Customers & Finance'}</div>
-                                <SecurityCheckbox label={t('deleteCustomer')} settingKey="authOnDeleteCustomer" />
-                                <SecurityCheckbox label={t('addTransaction')} subtext={settings.language === 'ar' ? 'تأمين إضافة مبالغ يدوية لحساب العملاء' : 'Secure manual addition of amounts to customer accounts'} settingKey="authOnAddTransaction" />
-                                <SecurityCheckbox label={t('deleteTransaction')} settingKey="authOnDeleteTransaction" />
-                            </div>
-                        </section>
-                    </div>
-
-                    {/* Left Column: Stacking Passwords and Receipt */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-                        {/* Language Selection */}
-                        <section className="settings-section-card">
-                            <header className="settings-section-header">
-                                <div className="settings-section-icon appearance" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-color)' }}>
-                                    <Globe size={24} />
-                                </div>
-                                <div>
-                                    <h3 style={{ margin: 0, fontSize: 'var(--fs-h3)' }}>{t('language')}</h3>
-                                    <p style={{ margin: 0, fontSize: 'var(--fs-sm)', opacity: 0.6 }}>{settings.language === 'ar' ? 'اختيار لغة واجهة النظام' : 'Choose system interface language'}</p>
-                                </div>
-                            </header>
-
-                            <div className="settings-button-grid">
-                                <button
-                                    className={`btn ${settings.language === 'ar' ? 'btn-primary' : 'btn-secondary'}`}
-                                    onClick={() => setLanguage('ar')}
-                                    style={{ padding: '1rem', borderRadius: 'var(--radius-lg)' }}
-                                >
-                                    العربية
-                                </button>
-                                <button
-                                    className={`btn ${settings.language === 'en' ? 'btn-primary' : 'btn-secondary'}`}
-                                    onClick={() => setLanguage('en')}
-                                    style={{ padding: '1rem', borderRadius: 'var(--radius-lg)' }}
-                                >
-                                    English
-                                </button>
-                            </div>
-                        </section>
-
-                        {/* 2. Password & Access */}
-                        <section className="settings-section-card">
-                            <header className="settings-section-header">
-                                <div className="settings-section-icon auth">
-                                    <Key size={24} />
-                                </div>
-                                <div>
-                                    <h3 style={{ margin: 0, fontSize: 'var(--fs-h3)' }}>{t('passwords')}</h3>
-                                    <p style={{ margin: 0, fontSize: 'var(--fs-sm)', opacity: 0.6 }}>{settings.language === 'ar' ? 'إدارة الوصول وحماية لوحة التحكم' : 'Manage access and dashboard protection'}</p>
-                                </div>
-                            </header>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                <div className="password-box">
-                                    <div className="password-box-header">
-                                        <span style={{ fontWeight: 700 }}>{t('systemPassword')}</span>
-                                        <span style={{ fontSize: 'var(--fs-xs)', opacity: 0.6 }}>{t('current')}: <code style={{ color: 'var(--accent-color)' }}>{settings.loginPassword}</code></span>
-                                    </div>
-                                    <form onSubmit={(e) => handlePasswordUpdate('loginPassword', e)} style={{ display: 'flex', gap: '0.5rem' }}>
-                                        <input type="text" name="password" placeholder={settings.language === 'ar' ? 'كلمة مرور جديدة...' : 'New password...'} required />
-                                        <button type="submit" className="btn btn-primary" style={{ borderRadius: 'var(--radius-md)' }}>{t('change')}</button>
-                                    </form>
-                                </div>
-
-                                <div className="password-box">
-                                    <div className="password-box-header">
-                                        <span style={{ fontWeight: 700 }}>{t('adminPassword')}</span>
-                                        <span style={{ fontSize: 'var(--fs-xs)', opacity: 0.6 }}>{t('current')}: <code style={{ color: 'var(--accent-color)' }}>{settings.adminPassword}</code></span>
-                                    </div>
-                                    <form onSubmit={(e) => handlePasswordUpdate('adminPassword', e)} style={{ display: 'flex', gap: '0.5rem' }}>
-                                        <input type="text" name="password" placeholder={settings.language === 'ar' ? 'كلمة مرور جديدة...' : 'New password...'} required />
-                                        <button type="submit" className="btn btn-primary" style={{ borderRadius: 'var(--radius-md)' }}>{t('change')}</button>
-                                    </form>
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* 3. Receipt Settings */}
-                        <section className="settings-section-card">
-                            <header className="settings-section-header">
-                                <div className="settings-section-icon receipt">
-                                    <FileBarChart size={24} />
-                                </div>
-                                <div>
-                                    <h3 style={{ margin: 0, fontSize: 'var(--fs-h3)' }}>{t('receiptSettings')}</h3>
-                                    <p style={{ margin: 0, fontSize: 'var(--fs-sm)', opacity: 0.6 }}>{settings.language === 'ar' ? 'تخصيص فاتورة البيع' : 'Customize sales invoice'}</p>
-                                </div>
-                            </header>
-
-                            <form onSubmit={handleReceiptUpdate}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                    <div className="form-group">
-                                        <label>{t('businessName')}</label>
-                                        <input type="text" name="title" defaultValue={settings.receipt.title || ''} required />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>{t('detailedAddress')}</label>
-                                        <input type="text" name="address" defaultValue={settings.receipt.address || ''} />
-                                    </div>
-                                    <div className="settings-button-grid">
-                                        <div className="form-group">
-                                            <label>{t('phone')}</label>
-                                            <input type="text" name="phone" defaultValue={settings.receipt.phone || ''} />
-                                        </div>
-                                        <div className="form-group">
-                                            <label>{t('receiptFooter')}</label>
-                                            <input type="text" name="footer" defaultValue={settings.receipt.footer || ''} />
-                                        </div>
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                                    <button type="submit" className="btn btn-primary" style={{ padding: '0.7rem 1.5rem' }}>
-                                        <Save size={16} /> {t('save')}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary receipt-preview-btn"
-                                        style={{ padding: '0.7rem 1rem' }}
-                                        onClick={() => {
-                                            const mockOp = {
-                                                id: 'PREVIEW',
-                                                timestamp: new Date().toISOString(),
-                                                customerName: 'Customer Preview',
-                                                partName: 'Part Preview',
-                                                quantity: 2,
-                                                price: 1500,
-                                                paidAmount: 1000,
-                                                paymentStatus: 'partial'
-                                            };
-                                            import('../utils/printing').then(m => m.printReceipt(mockOp, settings));
-                                        }}
-                                    >
-                                        <Printer size={16} /> {t('preview')}
-                                    </button>
-                                </div>
-                            </form>
-                        </section>
-                        <LicenseSection settings={settings} setData={setData} t={t} />
-                    </div>
+            <div className="settings-view" style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1.5rem',
+                height: 'calc(100% - 80px)',
+                overflow: 'hidden'
+            }}>
+                {/* Horizontal Tabs Navigation */}
+                <div className="settings-tabs-container" style={{
+                    display: 'flex',
+                    gap: '0.75rem',
+                    overflowX: 'auto',
+                    padding: '0 0.25rem 0.5rem 0.25rem',
+                    flexShrink: 0,
+                    borderBottom: '1px solid var(--border-color)',
+                    scrollbarWidth: 'none',  /* Firefox */
+                    msOverflowStyle: 'none'  /* IE 10+ */
+                }}>
+                    <style>{`
+                        .settings-tabs-container::-webkit-scrollbar { display: none; }
+                    `}</style>
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            className={`btn ${activeTab === tab.id ? 'btn-primary' : 'btn-ghost'}`}
+                            onClick={() => setActiveTab(tab.id)}
+                            style={{
+                                whiteSpace: 'nowrap',
+                                gap: '0.5rem',
+                                padding: '0.75rem 1.25rem',
+                                opacity: activeTab === tab.id ? 1 : 0.7,
+                                fontWeight: activeTab === tab.id ? 700 : 500,
+                                borderRadius: 'var(--radius-pill)',
+                                flexShrink: 0,
+                                border: activeTab === tab.id ? 'none' : '1px solid transparent'
+                            }}
+                        >
+                            {tab.icon}
+                            <span>{tab.label}</span>
+                        </button>
+                    ))}
                 </div>
 
-                {/* 4. Display & Backups - Full Width Bottom */}
-                <section className="settings-section-card settings-footer-section">
-                    <header className="settings-section-header">
-                        <div className="settings-section-icon appearance">
-                            <Palette size={24} />
-                        </div>
-                        <div>
-                            <h3 style={{ margin: 0, fontSize: 'var(--fs-h3)' }}>{t('backupAndDisplay')}</h3>
-                            <p style={{ margin: 0, fontSize: 'var(--fs-sm)', opacity: 0.6 }}>{settings.language === 'ar' ? 'التحكم في العرض وتصدير/استيراد الملفات' : 'Control display and export/import files'}</p>
-                        </div>
-                    </header>
-
-                    <div className="settings-button-grid" style={{ alignItems: 'flex-start' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            <div className="settings-item-row" onClick={toggleTheme}>
-                                <div>
-                                    <span className="settings-item-label">{t('darkMode')}</span>
-                                    <span className="settings-item-subtext">{settings.language === 'ar' ? 'تغيير مظهر النظام بالكامل' : 'Change entire system appearance'}</span>
-                                </div>
-                                <div style={{ color: 'var(--accent-color)' }}>
-                                    {settings.theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-                                </div>
-                            </div>
-                            <SecurityCheckbox
-                                label={settings.language === 'ar' ? 'إظهار الرصيد اليومي' : 'Show Daily Balance'}
-                                subtext={settings.language === 'ar' ? 'عرض إجمالي النقدية في القائمة الجانبية' : 'Display total cash in the sidebar'}
-                                settingKey="showSessionBalance"
-                            />
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            <div className="settings-button-grid">
-                                <button className="btn btn-secondary shadow-sm" style={{ padding: '1rem', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem' }} onClick={() => {
-                                    const now = new Date();
-                                    const blob = new Blob([exportData()], { type: 'text/plain' });
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = `backup_${now.toISOString().split('T')[0]}.txt`;
-                                    a.click();
-                                    window.showToast?.(settings.language === 'ar' ? 'جاري تصدير البيانات...' : 'Exporting data...', 'success');
-                                }}>
-                                    <Download size={20} /> {t('exportData')}
-                                </button>
-
-                                <label className="btn btn-secondary shadow-sm" style={{ padding: '1rem', borderRadius: 'var(--radius-lg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
-                                    <Upload size={20} /> {t('importData')}
-                                    <input type="file" hidden onChange={onImport} />
-                                </label>
-                            </div>
-                        </div>
-
-                    </div>
-                </section>
+                {/* Main Content Area */}
+                <main className="settings-content" style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem', width: '100%' }}>
+                    {renderContent()}
+                </main>
             </div>
         </div>
     );
 };
-
 export default Settings;

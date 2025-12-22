@@ -6,9 +6,16 @@ const LicenseScreen = ({ onActivate }) => {
     const { t, settings, setData } = useStore();
     const [code, setCode] = useState('');
 
-    const handleSubmit = (e) => {
+    const [loading, setLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        onActivate(code);
+        setLoading(true);
+        try {
+            await onActivate(code);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const toggleLang = () => {
@@ -24,6 +31,7 @@ const LicenseScreen = ({ onActivate }) => {
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
                     <button
                         onClick={toggleLang}
+                        type="button"
                         className="btn btn-secondary"
                         style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', gap: '0.5rem', borderRadius: 'var(--radius-md)' }}
                     >
@@ -48,9 +56,10 @@ const LicenseScreen = ({ onActivate }) => {
                         onChange={(e) => setCode(e.target.value)}
                         className="search-input"
                         style={{ maxWidth: '100%', width: '100%' }}
+                        disabled={loading}
                     />
-                    <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '1rem' }}>
-                        <Key size={18} /> {t('activateNow')}
+                    <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '1rem' }} disabled={loading}>
+                        {loading ? (settings.language === 'ar' ? 'جاري التحقق...' : 'Verifying...') : (<><Key size={18} /> {t('activateNow')}</>)}
                     </button>
                     <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                         {t('licenseWarning')}
