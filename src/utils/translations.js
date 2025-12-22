@@ -106,6 +106,14 @@ export const translations = {
         enterAdminPassword: 'أدخل كلمة مرور المدير...',
         incorrectAdminPassword: 'كلمة مرور المدير غير صحيحة',
         confirm: 'تأكيد',
+
+        // Security Permissions Missing Keys
+        deleteOperations: 'حذف عمليات البيع',
+        addOperations: 'إضافة عمليات البيع', // Plural key used in Settings
+        deletePart: 'حذف الأصناف',
+        editPart: 'تعديل الأصناف',
+        deleteCustomer: 'حذف العملاء',
+        deleteTransaction: 'حذف المعاملات المالية',
     },
     en: {
         appName: 'The Mechanic',
@@ -214,5 +222,13 @@ export const translations = {
         enterAdminPassword: 'Enter admin password...',
         incorrectAdminPassword: 'Incorrect admin password',
         confirm: 'Confirm',
+
+        // Security Permissions Missing Keys
+        deleteOperations: 'Delete Sales',
+        addOperations: 'Add Sales',
+        deletePart: 'Delete Parts',
+        editPart: 'Edit Parts',
+        deleteCustomer: 'Delete Customers',
+        deleteTransaction: 'Delete Transactions',
     }
 };
