@@ -31,3 +31,5 @@ temp/
 # Backup folders
 vanilla-backup/
 backup_*.txt
+
+generated_keys.txt
