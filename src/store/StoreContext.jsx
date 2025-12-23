@@ -440,6 +440,41 @@ export const StoreProvider = ({ children }) => {
         return btoa(unescape(encodeURIComponent(str)));
     };
 
+    const checkAppUpdates = async (manual = false) => {
+        if (!window.electron) return { error: 'not_electron' };
+        try {
+            // Get current version from Electron
+            let currentVersion = '1.0.0';
+            if (window.electron?.getAppVersion) {
+                currentVersion = await window.electron.getAppVersion();
+            }
+
+            // Get latest version from Firestore
+            const versionRef = doc(db, "Control", "Version");
+            const versionSnap = await getDoc(versionRef);
+
+            if (versionSnap.exists()) {
+                const remoteData = versionSnap.data();
+                const latestVersion = remoteData.LatestVersion;
+                const downloadURL = remoteData.DownloadURL;
+
+                if (latestVersion && latestVersion !== currentVersion) {
+                    addNotification(translations[data.settings.language].updateAvailable.replace('%v', latestVersion), 'info');
+
+                    // Return positive if update found for UI feedback
+                    return { updateFound: true, version: latestVersion, url: downloadURL };
+                } else if (manual) {
+                    addNotification(translations[data.settings.language].upToDate.replace('%v', currentVersion), 'success');
+                }
+            }
+            return { updateFound: false, version: currentVersion };
+        } catch (error) {
+            console.error("Update check failed:", error);
+            if (manual) addNotification("فشل التحقق من التحديثات", "danger");
+            return { error: true };
+        }
+    };
+
     const importData = (encodedStr) => {
         try {
             const jsonStr = decodeURIComponent(escape(atob(encodedStr)));
@@ -477,6 +512,7 @@ export const StoreProvider = ({ children }) => {
         setData,
         recordDirectTransaction,
         licenseData,
+        checkAppUpdates,
         // Short hands for convenience
         operations: data.operations,
         transactions: data.transactions || [],

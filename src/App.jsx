@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from './store/StoreContext';
 import Sidebar from './components/Sidebar';
 import Operations from './views/Operations';
@@ -12,14 +12,12 @@ import EndSessionModal from './components/EndSessionModal';
 import Toast from './components/Toast';
 import ConfirmDialog from './components/ConfirmDialog';
 import AdminAuthModal from './components/AdminAuthModal';
-import Modal from './components/Modal';
-import { Menu, Lock } from 'lucide-react';
-import { useEffect } from 'react';
+import { Menu } from 'lucide-react';
 
 function App() {
     const {
         isLicensed, activateLicense, settings,
-        notifications
+        notifications, checkAppUpdates
     } = useStore();
 
     const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -36,7 +34,6 @@ function App() {
         const handleKeyDown = (e) => {
             const isInput = ['INPUT', 'TEXTAREA'].includes(e.target.tagName);
 
-            // Navigation (1-5) - Blocked if typing
             if (!isInput) {
                 switch (e.key) {
                     case '1': handleTabChange('operations'); break;
@@ -48,26 +45,17 @@ function App() {
                 }
             }
 
-            // Escape - Works even if typing
             if (e.key === 'Escape') {
-                // 1. If End Session modal is explicitly open, close it
                 if (isEndSessionOpen) {
                     setIsEndSessionOpen(false);
                     return;
                 }
-
-                // 2. If any other modal is open (detected via DOM), ignore (let modal handle it)
                 if (document.querySelector('.modal-overlay')) {
-                    // However, we must ensure that internal modals also handle ESC even if in input
-                    // Modal.jsx listener (Step 399) does not check for input, so it works.
                     return;
                 }
-
-                // 3. If in Settings, go back to Operations
                 if (currentTab === 'settings') {
                     setCurrentTab('operations');
                 } else {
-                    // 4. Otherwise, open End Session
                     setIsEndSessionOpen(true);
                 }
             }
@@ -76,6 +64,12 @@ function App() {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isEndSessionOpen, currentTab]);
+
+    useEffect(() => {
+        if (isLoggedIn && settings.autoCheckUpdates && window.electron) {
+            checkAppUpdates();
+        }
+    }, [isLoggedIn, settings.autoCheckUpdates]);
 
     const renderTabContent = () => {
         switch (currentTab) {
@@ -100,7 +94,6 @@ function App() {
         setIsMobileShow(false);
     };
 
-    // Global Wrapper to ensure Toast/Confirm are always available
     return (
         <div key={settings.theme} data-theme={settings.theme}>
             <Toast />

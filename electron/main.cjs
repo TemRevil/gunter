@@ -1,6 +1,5 @@
 const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const path = require('path');
-const { autoUpdater } = require('electron-updater');
 
 function createWindow() {
     const isDev = !app.isPackaged;
@@ -56,69 +55,8 @@ ipcMain.handle('get-app-version', () => {
     return app.getVersion();
 });
 
-ipcMain.on('check-for-updates-manual', () => {
-    autoUpdater.checkForUpdatesAndNotify();
-});
-
 app.whenReady().then(() => {
     createWindow();
-
-    // Check for updates
-    autoUpdater.logger = console;
-
-    // In development mode, we use the dev-app-update.yml
-    if (!app.isPackaged) {
-        // This will allow checking for updates even in dev mode using dev-app-update.yml
-        autoUpdater.updateConfigPath = path.join(__dirname, '../dev-app-update.yml');
-    }
-
-    autoUpdater.on('checking-for-update', () => {
-        console.log('Checking for update...');
-    });
-
-    autoUpdater.on('update-available', (info) => {
-        console.log('Update available:', info.version);
-        const mainWindow = BrowserWindow.getAllWindows()[0];
-        if (mainWindow) {
-            mainWindow.webContents.send('update-message', {
-                type: 'available',
-                version: info.version
-            });
-        }
-    });
-
-    autoUpdater.on('update-not-available', (info) => {
-        console.log('Update not available:', info.version);
-        const mainWindow = BrowserWindow.getAllWindows()[0];
-        if (mainWindow) {
-            mainWindow.webContents.send('update-message', {
-                type: 'latest',
-                version: info.version
-            });
-        }
-    });
-
-    autoUpdater.on('update-downloaded', (info) => {
-        console.log('Update downloaded:', info.version);
-        const mainWindow = BrowserWindow.getAllWindows()[0];
-        if (mainWindow) {
-            mainWindow.webContents.send('update-downloaded');
-        }
-    });
-
-    autoUpdater.on('error', (err) => {
-        console.error('Update error:', err);
-        const mainWindow = BrowserWindow.getAllWindows()[0];
-        if (mainWindow) {
-            mainWindow.webContents.send('update-message', {
-                type: 'error',
-                message: err.message
-            });
-        }
-    });
-
-    // Check on startup if autoCheckUpdates is enabled or we are in build
-    autoUpdater.checkForUpdatesAndNotify();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {

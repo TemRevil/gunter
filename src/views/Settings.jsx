@@ -116,7 +116,8 @@ const LicenseSection = ({ settings, setData, t, licenseData }) => (
 const Settings = () => {
     const {
         settings, toggleTheme, updateReceiptSettings,
-        exportData, importData, setData, data, t, licenseData
+        exportData, importData, setData, data, t, licenseData,
+        checkAppUpdates
     } = useContext(StoreContext);
 
     const [activeTab, setActiveTab] = useState('general');
@@ -290,47 +291,53 @@ const Settings = () => {
                             </div>
                         </section>
 
-                        <section className="settings-section-card" style={{ padding: '1.5rem' }}>
-                            <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
-                                <div className="settings-section-icon security" style={{ background: 'rgba(139, 92, 246, 0.1)', color: 'var(--accent-color)', width: '40px', height: '40px' }}>
-                                    <Download size={20} />
+                        {window.electron && (
+                            <section className="settings-section-card" style={{ padding: '1.5rem' }}>
+                                <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
+                                    <div className="settings-section-icon security" style={{ background: 'rgba(139, 92, 246, 0.1)', color: 'var(--accent-color)', width: '40px', height: '40px' }}>
+                                        <Download size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('checkForUpdates')}</h3>
+                                    </div>
+                                </header>
+                                <div className="settings-item-row" onClick={() => {
+                                    setData(prev => ({
+                                        ...prev,
+                                        settings: { ...prev.settings, autoCheckUpdates: !prev.settings.autoCheckUpdates }
+                                    }));
+                                }} style={{ padding: '0.75rem', marginBottom: '1rem' }}>
+                                    <div>
+                                        <span className="settings-item-label">{t('autoCheckUpdates')}</span>
+                                    </div>
+                                    <div className={`toggle-switch ${settings.autoCheckUpdates ? 'active' : ''}`}>
+                                        <div className="toggle-knob" />
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('checkForUpdates')}</h3>
-                                </div>
-                            </header>
-                            <div className="settings-item-row" onClick={() => {
-                                setData(prev => ({
-                                    ...prev,
-                                    settings: { ...prev.settings, autoCheckUpdates: !prev.settings.autoCheckUpdates }
-                                }));
-                            }} style={{ padding: '0.75rem', marginBottom: '1rem' }}>
-                                <div>
-                                    <span className="settings-item-label">{t('autoCheckUpdates')}</span>
-                                </div>
-                                <div className={`toggle-switch ${settings.autoCheckUpdates ? 'active' : ''}`}>
-                                    <div className="toggle-knob" />
-                                </div>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <div style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.25rem' }}>
-                                    {t('systemVersion')}: <strong style={{ color: 'var(--accent-color)' }}>v{appVersion}</strong>
-                                </div>
-                                <button
-                                    className="btn btn-primary"
-                                    style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-                                    onClick={() => {
-                                        if (window.electron?.checkForUpdates) {
-                                            window.electron.checkForUpdates();
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <div style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.25rem' }}>
+                                        {t('systemVersion')}: <strong style={{ color: 'var(--accent-color)' }}>v{appVersion}</strong>
+                                    </div>
+                                    <button
+                                        className="btn btn-primary"
+                                        style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                                        onClick={async () => {
                                             window.showToast?.(settings.language === 'ar' ? 'جاري البحث عن تحديثات...' : 'Checking for updates...', 'info');
-                                        }
-                                    }}
-                                >
-                                    <Download size={18} />
-                                    {t('checkForUpdates')}
-                                </button>
-                            </div>
-                        </section>
+                                            const result = await checkAppUpdates(true);
+                                            if (result?.updateFound && result?.url) {
+                                                // Provide an option to open the URL
+                                                if (window.confirm(settings.language === 'ar' ? 'يوجد تحديث جديد. هل تريد الذهاب لرابط التحميل؟' : 'New update found. Do you want to go to the download link?')) {
+                                                    window.open(result.url, '_blank');
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <Download size={18} />
+                                        {t('checkForUpdates')}
+                                    </button>
+                                </div>
+                            </section>
+                        )}
                     </div>
                 );
             case 'security':
