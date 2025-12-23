@@ -2,7 +2,7 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     match /{allPaths=**} {
-      // Allow read access for any authenticated user (needed for downloading updates)
+      // Allow read access for any authenticated user
       allow read: if request.auth != null;
       
       // Allow write access only for the specific Admin UID

@@ -101,7 +101,7 @@ ipcMain.on('execute-update', (event, { url }) => {
             response.on('data', (chunk) => {
                 downloadedSize += chunk.length;
                 const percent = Math.floor((downloadedSize / totalSize) * 100);
-                if (percent !== lastPercent && percent % 10 === 0) {
+                if (percent !== lastPercent) {
                     sendLog(`Downloading: ${percent}%`);
                     lastPercent = percent;
                 }
@@ -116,9 +116,11 @@ ipcMain.on('execute-update', (event, { url }) => {
 
                 // Launch the installer
                 try {
-                    spawn(installerPath, [], {
+                    // Launch via cmd default to ensure visible prompt and correct execution
+                    spawn('cmd.exe', ['/c', 'start', '""', installerPath], {
                         detached: true,
-                        stdio: 'ignore'
+                        stdio: 'ignore',
+                        windowsHide: false
                     }).unref();
 
                     sendLog('Installer launched successfully!');

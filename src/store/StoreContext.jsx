@@ -457,19 +457,20 @@ export const StoreProvider = ({ children }) => {
             if (versionSnap.exists()) {
                 const remoteData = versionSnap.data();
                 const latestVersion = remoteData.LatestVersion;
-                let downloadURL = remoteData.DownloadURL;
 
                 if (latestVersion && latestVersion !== currentVersion) {
-                    // Try to get URL from Storage
+                    // Get download URL from Firebase Storage using static filename
                     try {
-                        const fileRef = ref(storage, `Setup/Gunter Management System Setup ${latestVersion}.exe`);
-                        const storageUrl = await getDownloadURL(fileRef);
-                        if (storageUrl) {
-                            console.log("Got download URL from Storage:", storageUrl);
-                            downloadURL = storageUrl;
-                        }
+                        const fileRef = ref(storage, `Setup/GunterSetup.exe`);
+                        const downloadURL = await getDownloadURL(fileRef);
+                        console.log("Got download URL from Storage:", downloadURL);
+
+                        addNotification(translations[data.settings.language].updateAvailable.replace('%v', latestVersion), 'info');
+                        return { updateFound: true, version: latestVersion, url: downloadURL };
                     } catch (storageErr) {
-                        console.warn("Storage URL fetch failed, using fallback:", storageErr);
+                        console.error("Update file not found in Firebase Storage:", storageErr);
+                        if (manual) addNotification("Update file not available", "warning");
+                        return { error: true, message: "Update file not found" };
                     }
 
                     addNotification(translations[data.settings.language].updateAvailable.replace('%v', latestVersion), 'info');
