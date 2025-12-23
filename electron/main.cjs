@@ -80,12 +80,22 @@ app.whenReady().then(() => {
         console.log('Update available:', info.version);
         const mainWindow = BrowserWindow.getAllWindows()[0];
         if (mainWindow) {
-            mainWindow.webContents.send('update-message', 'Update available');
+            mainWindow.webContents.send('update-message', {
+                type: 'available',
+                version: info.version
+            });
         }
     });
 
     autoUpdater.on('update-not-available', (info) => {
-        console.log('Update not available.');
+        console.log('Update not available:', info.version);
+        const mainWindow = BrowserWindow.getAllWindows()[0];
+        if (mainWindow) {
+            mainWindow.webContents.send('update-message', {
+                type: 'latest',
+                version: info.version
+            });
+        }
     });
 
     autoUpdater.on('update-downloaded', (info) => {

@@ -143,8 +143,9 @@ export const translations = {
         checkForUpdates: 'البحث عن تحديثات',
         autoCheckUpdates: 'البحث التلقائي عن تحديثات برمجية',
         systemVersion: 'إصدار النظام الحالي',
-        updateAvailable: 'تحديث جديد متاح! جاري التحميل...',
+        updateAvailable: 'تحديث جديد متاح! (v%v) جاري التحميل...',
         updateDownloaded: 'تم تحميل التحديث. سيتم التثبيت عند إغلاق البرنامج.',
+        upToDate: 'أنت تستخدم أحدث إصدار بالفعل (v%v)',
     },
     en: {
         appName: 'Gunter',
@@ -290,7 +291,8 @@ export const translations = {
         checkForUpdates: 'Check for Updates',
         autoCheckUpdates: 'Auto-check for updates',
         systemVersion: 'Current System Version',
-        updateAvailable: 'New update available! Downloading...',
+        updateAvailable: 'New update available! (v%v) Downloading...',
         updateDownloaded: 'Update downloaded. It will be installed on restart.',
+        upToDate: 'You are already using the latest version (v%v)',
     }
 };

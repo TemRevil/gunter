@@ -128,8 +128,14 @@ const Settings = () => {
         }
 
         if (window.electron?.onUpdateMessage) {
-            window.electron.onUpdateMessage(() => {
-                window.showToast?.(t('updateAvailable'), 'info');
+            window.electron.onUpdateMessage((data) => {
+                if (data.type === 'available') {
+                    const msg = t('updateAvailable').replace('%v', data.version);
+                    window.showToast?.(msg, 'info');
+                } else if (data.type === 'latest') {
+                    const msg = t('upToDate').replace('%v', data.version);
+                    window.showToast?.(msg, 'success');
+                }
             });
         }
 
