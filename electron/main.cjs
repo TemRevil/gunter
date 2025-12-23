@@ -79,12 +79,11 @@ ipcMain.on('execute-update', (event, { url }) => {
     sendLog(`Current PID: ${currentPid}`);
     sendLog(`Updater script: ${updaterPath}`);
 
-    // Launch the updater batch file with arguments
+    // Launch the updater batch file with arguments using 'start' for a visible window
     sendLog('Launching updater...');
 
-    const updaterProcess = spawn('cmd.exe', ['/c', updaterPath, url, currentPid], {
+    const updaterProcess = spawn('cmd.exe', ['/c', 'start', 'cmd.exe', '/k', updaterPath, url, currentPid], {
         detached: true,
-        stdio: 'ignore',
         windowsHide: false
     });
 
