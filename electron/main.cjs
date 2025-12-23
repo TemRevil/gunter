@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const path = require('path');
+const { spawn } = require('child_process');
 
 function createWindow() {
     const isDev = !app.isPackaged;
@@ -53,6 +54,59 @@ ipcMain.on('show-notification', (event, { title, body }) => {
 
 ipcMain.handle('get-app-version', () => {
     return app.getVersion();
+});
+
+ipcMain.on('execute-update', (event, { url }) => {
+    const tempPath = app.getPath('temp');
+    const installerPath = path.join(tempPath, 'GunterSetup.exe');
+    const currentPid = process.pid;
+
+    // Command to run in Windows Terminal
+    const psCommand = `
+        $Host.UI.RawUI.WindowTitle = "Gunter System Updater";
+        Clear-Host;
+        Write-Host "=========================================" -ForegroundColor Cyan;
+        Write-Host "      GUNTER SYSTEM AUTO-UPDATER         " -ForegroundColor Cyan;
+        Write-Host "=========================================" -ForegroundColor Cyan;
+        Write-Host "";
+        Write-Host "[1/3] Downloading latest setup..." -ForegroundColor Yellow;
+        
+        try {
+            Invoke-WebRequest -Uri "${url}" -OutFile "${installerPath}" -ErrorAction Stop;
+            Write-Host ">>> Download complete." -ForegroundColor Green;
+        } catch {
+            Write-Host ">>> Error: Failed to download update." -ForegroundColor Red;
+            Write-Host $_.Exception.Message;
+            Pause;
+            Exit;
+        }
+
+        Write-Host "";
+        Write-Host "[2/3] Launching installer..." -ForegroundColor Yellow;
+        Start-Process "${installerPath}";
+        
+        Write-Host "";
+        Write-Host "[3/3] Closing current build for installation..." -ForegroundColor Yellow;
+        Write-Host "The application will restart after you finish the setup." -ForegroundColor Gray;
+        Start-Sleep -Seconds 2;
+        Stop-Process -Id ${currentPid} -Force;
+    `;
+
+    // Try to launch Windows Terminal, fallback to powershell if not available
+    const args = ['powershell', '-NoExit', '-Command', psCommand];
+
+    const wt = spawn('wt.exe', args, {
+        detached: true,
+        stdio: 'ignore'
+    });
+
+    wt.on('error', () => {
+        // Fallback to standard powershell window
+        spawn('powershell.exe', ['-NoExit', '-Command', psCommand], {
+            detached: true,
+            stdio: 'ignore'
+        });
+    });
 });
 
 app.whenReady().then(() => {

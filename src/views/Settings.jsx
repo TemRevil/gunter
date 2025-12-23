@@ -326,8 +326,12 @@ const Settings = () => {
                                             const result = await checkAppUpdates(true);
                                             if (result?.updateFound && result?.url) {
                                                 // Provide an option to open the URL
-                                                if (window.confirm(settings.language === 'ar' ? 'يوجد تحديث جديد. هل تريد الذهاب لرابط التحميل؟' : 'New update found. Do you want to go to the download link?')) {
-                                                    window.open(result.url, '_blank');
+                                                if (window.confirm(settings.language === 'ar' ? 'يوجد تحديث جديد. هل تريد البدء في التثبيت التلقائي؟' : 'New update found. Do you want to start the automatic installation?')) {
+                                                    if (window.electron?.executeUpdate) {
+                                                        window.electron.executeUpdate(result.url);
+                                                    } else {
+                                                        window.open(result.url, '_blank');
+                                                    }
                                                 }
                                             }
                                         }}

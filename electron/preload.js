@@ -12,5 +12,7 @@ contextBridge.exposeInMainWorld('electron', {
         ipcRenderer.send('show-notification', { title, body });
     },
     // Get app version from package.json
-    getAppVersion: () => ipcRenderer.invoke('get-app-version')
+    getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+    // Execute auto-update via terminal
+    executeUpdate: (url) => ipcRenderer.send('execute-update', { url })
 });
