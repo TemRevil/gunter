@@ -43,8 +43,7 @@
       "dist/**/*",
       "electron/**/*",
       "public/**/*",
-      "package.json",
-      "updater.bat"
+      "package.json"
     ],
     "win": {
       "target": "nsis",

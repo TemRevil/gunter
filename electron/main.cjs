@@ -1,10 +1,11 @@
 const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
+const https = require('https');
+const fs = require('fs');
 
 function createWindow() {
     const isDev = !app.isPackaged;
-    // Define icon path dynamically
     const iconPath = isDev
         ? path.join(__dirname, '../public/icon.png')
         : path.join(__dirname, '../dist/icon.png');
@@ -18,23 +19,17 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
         },
-        // Hide the default menu bar on Windows/Linux (optional, simpler look)
         autoHideMenuBar: true
     });
 
     if (isDev) {
-        // In development, load from the Vite dev server
         mainWindow.loadURL('http://localhost:5173');
-        // Open DevTools for debugging
         mainWindow.webContents.openDevTools();
     } else {
-        // In production, load the built index.html
-        // We assume dist is one level up from this file (which is in electron/)
         mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
     }
 }
 
-// Handle notification requests from renderer
 ipcMain.on('show-notification', (event, { title, body }) => {
     if (Notification.isSupported()) {
         const isDev = !app.isPackaged;
@@ -66,30 +61,97 @@ ipcMain.on('execute-update', (event, { url }) => {
     };
 
     sendLog('Update execution started...');
-    sendLog(`Target URL: ${url}`);
+    sendLog(`Download URL: ${url}`);
 
-    const currentPid = process.pid;
-    const isDev = !app.isPackaged;
+    const installerPath = path.join(app.getPath('temp'), 'GunterSetup.exe');
 
-    // Locate the updater.bat file
-    const updaterPath = isDev
-        ? path.join(__dirname, '../updater.bat')
-        : path.join(process.resourcesPath, 'updater.bat');
+    sendLog(`Download path: ${installerPath}`);
+    sendLog('Starting download...');
 
-    sendLog(`Current PID: ${currentPid}`);
-    sendLog(`Updater script: ${updaterPath}`);
+    const downloadFile = (downloadUrl) => {
+        const file = fs.createWriteStream(installerPath);
 
-    // Launch the updater batch file with arguments using 'start' for a visible window
-    sendLog('Launching updater...');
+        https.get(downloadUrl, (response) => {
+            // Handle redirects
+            if (response.statusCode === 302 || response.statusCode === 301) {
+                sendLog(`Following redirect to: ${response.headers.location}`);
+                file.close();
+                // Clean up partial file
+                try {
+                    fs.unlinkSync(installerPath);
+                } catch (e) { }
+                // Follow the redirect
+                downloadFile(response.headers.location);
+                return;
+            }
 
-    const updaterProcess = spawn('cmd.exe', ['/c', 'start', 'cmd.exe', '/k', updaterPath, url, currentPid], {
-        detached: true,
-        windowsHide: false
-    });
+            if (response.statusCode !== 200) {
+                file.close();
+                try {
+                    fs.unlinkSync(installerPath);
+                } catch (e) { }
+                sendLog(`Download failed with status code: ${response.statusCode}`);
+                return;
+            }
 
-    updaterProcess.unref();
+            const totalSize = parseInt(response.headers['content-length'], 10);
+            let downloadedSize = 0;
+            let lastPercent = 0;
 
-    sendLog('Updater process started.');
+            response.on('data', (chunk) => {
+                downloadedSize += chunk.length;
+                const percent = Math.floor((downloadedSize / totalSize) * 100);
+                if (percent !== lastPercent && percent % 10 === 0) {
+                    sendLog(`Downloading: ${percent}%`);
+                    lastPercent = percent;
+                }
+            });
+
+            response.pipe(file);
+
+            file.on('finish', () => {
+                file.close();
+                sendLog('Download 100% complete!');
+                sendLog('Launching installer...');
+
+                // Launch the installer
+                try {
+                    spawn(installerPath, [], {
+                        detached: true,
+                        stdio: 'ignore'
+                    }).unref();
+
+                    sendLog('Installer launched successfully!');
+                    sendLog('Closing app in 2 seconds...');
+
+                    // Close the app after 2 seconds
+                    setTimeout(() => {
+                        app.quit();
+                    }, 2000);
+                } catch (err) {
+                    sendLog(`Error launching installer: ${err.message}`);
+                }
+            });
+
+            file.on('error', (err) => {
+                try {
+                    fs.unlinkSync(installerPath);
+                } catch (e) { }
+                sendLog(`File write error: ${err.message}`);
+            });
+        }).on('error', (err) => {
+            try {
+                fs.unlinkSync(installerPath);
+            } catch (e) { }
+            sendLog(`Download error: ${err.message}`);
+        });
+    };
+
+    try {
+        downloadFile(url);
+    } catch (err) {
+        sendLog(`Error starting download: ${err.message}`);
+    }
 });
 
 app.whenReady().then(() => {

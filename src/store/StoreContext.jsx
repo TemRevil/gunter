@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { translations } from '../utils/translations';
-import { db, auth } from '../firebase';
+import { db, auth, storage } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { ref, getDownloadURL } from 'firebase/storage';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
 const StoreContext = createContext();
@@ -456,9 +457,21 @@ export const StoreProvider = ({ children }) => {
             if (versionSnap.exists()) {
                 const remoteData = versionSnap.data();
                 const latestVersion = remoteData.LatestVersion;
-                const downloadURL = remoteData.DownloadURL;
+                let downloadURL = remoteData.DownloadURL;
 
                 if (latestVersion && latestVersion !== currentVersion) {
+                    // Try to get URL from Storage
+                    try {
+                        const fileRef = ref(storage, `Setup/Gunter Management System Setup ${latestVersion}.exe`);
+                        const storageUrl = await getDownloadURL(fileRef);
+                        if (storageUrl) {
+                            console.log("Got download URL from Storage:", storageUrl);
+                            downloadURL = storageUrl;
+                        }
+                    } catch (storageErr) {
+                        console.warn("Storage URL fetch failed, using fallback:", storageErr);
+                    }
+
                     addNotification(translations[data.settings.language].updateAvailable.replace('%v', latestVersion), 'info');
 
                     // Return positive if update found for UI feedback
