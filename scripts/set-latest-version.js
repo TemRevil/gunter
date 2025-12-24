@@ -32,5 +32,5 @@ const setLatest = async (version) => {
     }
 };
 
-const argVersion = process.argv[2] || '1.10.9';
+const argVersion = process.argv[2] || '1.10.10';
 setLatest(argVersion);
