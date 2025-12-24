@@ -246,18 +246,18 @@ const Settings = () => {
                                     <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('language')}</h3>
                                 </div>
                             </header>
-                            <div className="settings-button-grid">
+                            <div className="settings-button-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem', width: '100%' }}>
                                 <button
                                     className={`btn ${settings.language === 'ar' ? 'btn-primary' : 'btn-secondary'}`}
                                     onClick={() => setLanguage('ar')}
-                                    style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)' }}
+                                    style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)', whiteSpace: 'normal', textAlign: 'center', minWidth: 0 }}
                                 >
                                     العربية
                                 </button>
                                 <button
                                     className={`btn ${settings.language === 'en' ? 'btn-primary' : 'btn-secondary'}`}
                                     onClick={() => setLanguage('en')}
-                                    style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)' }}
+                                    style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)', whiteSpace: 'normal', textAlign: 'center', minWidth: 0 }}
                                 >
                                     English
                                 </button>
@@ -556,7 +556,8 @@ const Settings = () => {
                 flexDirection: 'column',
                 gap: '1.5rem',
                 height: 'calc(100% - 80px)',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                padding: '1rem'
             }}>
                 {/* Horizontal Tabs Navigation */}
                 <div
@@ -620,22 +621,11 @@ const Settings = () => {
                 </div>
 
                 {/* Main Content Area */}
-                <main className="settings-content" style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem', width: '100%' }}>
+                <main className="settings-content" style={{ flex: 1, overflowY: 'auto', padding: '1rem', width: '100%' }}>
                     {renderContent()}
                 </main>
 
-                {/* App Version Info */}
-                <div style={{
-                    textAlign: 'center',
-                    padding: '1rem',
-                    fontSize: 'var(--fs-xs)',
-                    color: 'var(--text-secondary)',
-                    opacity: 0.6,
-                    borderTop: '1px solid var(--border-color)',
-                    marginTop: 'auto'
-                }}>
-                    {settings.language === 'ar' ? 'إصدار النظام' : 'Gunter Management System'} v{appVersion}
-                </div>
+
             </div>
         </div>
     );
