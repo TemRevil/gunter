@@ -244,6 +244,15 @@ app.whenReady().then(async () => {
             log.error('checkForUpdates failed:', err);
             console.error('checkForUpdates failed:', err);
         }
+    } else if (app.isPackaged) {
+        // Auto-check for updates on startup in production builds
+        log.info('App is packaged — checking for updates on startup');
+        try {
+            const res = await autoUpdater.checkForUpdates();
+            log.info('Startup checkForUpdates result:', res);
+        } catch (err) {
+            log.error('Startup checkForUpdates failed:', err);
+        }
     }
 });
 
