@@ -224,7 +224,7 @@ ipcMain.on('execute-update', (event, { url }) => {
     }
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
     createWindow();
 
     app.on('activate', () => {
@@ -232,6 +232,19 @@ app.whenReady().then(() => {
             createWindow();
         }
     });
+
+    // TEST HOOK: allow forcing a check for updates against configured provider (e.g., GitHub)
+    if (process.env.TEST_CHECK_PROVIDER === 'github') {
+        log.info('TEST_CHECK_PROVIDER=github detected — invoking autoUpdater.checkForUpdates()');
+        try {
+            const res = await autoUpdater.checkForUpdates();
+            log.info('checkForUpdates result:', res);
+            console.log('checkForUpdates result:', res);
+        } catch (err) {
+            log.error('checkForUpdates failed:', err);
+            console.error('checkForUpdates failed:', err);
+        }
+    }
 });
 
 app.on('window-all-closed', () => {
