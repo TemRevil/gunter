@@ -249,7 +249,7 @@ const Settings = () => {
         { id: 'general', label: t('appearanceAndLanguage'), icon: <Palette size={20} /> },
         { id: 'security', label: t('securityPermissions'), icon: <ShieldAlert size={20} /> },
         { id: 'receipt', label: t('receiptSettings'), icon: <FileText size={20} /> },
-        { id: 'data', label: t('backupAndDisplay'), icon: <Save size={20} /> },
+        { id: 'data', label: t('backups'), icon: <Save size={20} /> },
         { id: 'license', label: t('license'), icon: <ShieldCheck size={20} /> },
     ];
 
@@ -468,7 +468,7 @@ const Settings = () => {
                 );
             case 'receipt':
                 return (
-                    <section className="settings-section-card" style={{ padding: '1.5rem', maxWidth: '600px', margin: '0 auto' }}>
+                    <section key={`receipt-${settings.language}`} className="settings-section-card" style={{ padding: '1.5rem', maxWidth: '600px', margin: '0 auto' }}>
                         <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
                             <div className="settings-section-icon receipt" style={{ width: '40px', height: '40px' }}>
                                 <FileBarChart size={20} />
@@ -482,20 +482,20 @@ const Settings = () => {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                 <div className="form-group" style={{ marginBottom: 0 }}>
                                     <label style={{ fontSize: '0.85rem' }}>{t('businessName')}</label>
-                                    <input type="text" name="title" defaultValue={settings.receipt.title || ''} required style={{ padding: '0.5rem 0.75rem' }} />
+                                    <input type="text" name="title" defaultValue={settings.receipt.title || t('defaultReceiptTitle')} required style={{ padding: '0.5rem 0.75rem' }} />
                                 </div>
                                 <div className="form-group" style={{ marginBottom: 0 }}>
                                     <label style={{ fontSize: '0.85rem' }}>{t('detailedAddress')}</label>
-                                    <input type="text" name="address" defaultValue={settings.receipt.address || ''} style={{ padding: '0.5rem 0.75rem' }} />
+                                    <input type="text" name="address" defaultValue={settings.receipt.address || t('defaultReceiptAddress')} style={{ padding: '0.5rem 0.75rem' }} />
                                 </div>
                                 <div className="settings-button-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                     <div className="form-group" style={{ marginBottom: 0 }}>
                                         <label style={{ fontSize: '0.85rem' }}>{t('phone')}</label>
-                                        <input type="text" name="phone" defaultValue={settings.receipt.phone || ''} style={{ padding: '0.5rem 0.75rem' }} />
+                                        <input type="text" name="phone" defaultValue={settings.receipt.phone || t('defaultReceiptPhone')} style={{ padding: '0.5rem 0.75rem' }} />
                                     </div>
                                     <div className="form-group" style={{ marginBottom: 0 }}>
                                         <label style={{ fontSize: '0.85rem' }}>{t('receiptFooter')}</label>
-                                        <input type="text" name="footer" defaultValue={settings.receipt.footer || ''} style={{ padding: '0.5rem 0.75rem' }} />
+                                        <input type="text" name="footer" defaultValue={settings.receipt.footer || t('defaultReceiptFooter')} style={{ padding: '0.5rem 0.75rem' }} />
                                     </div>
                                 </div>
                             </div>
@@ -535,7 +535,7 @@ const Settings = () => {
                                 <Save size={20} />
                             </div>
                             <div>
-                                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('backupAndDisplay')}</h3>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('backups')}</h3>
                             </div>
                         </header>
 
