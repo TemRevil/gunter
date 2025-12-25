@@ -117,7 +117,7 @@ const Settings = () => {
     const {
         settings, toggleTheme, updateReceiptSettings,
         exportData, importData, setData, data, t, licenseData,
-        checkAppUpdates
+        checkAppUpdates, updateState, downloadUpdate, installUpdate, clearUpdateState
     } = useContext(StoreContext);
 
     const [activeTab, setActiveTab] = useState('general');
@@ -131,7 +131,7 @@ const Settings = () => {
         if (window.electron?.onUpdateMessage) {
             window.electron.onUpdateMessage((data) => {
                 if (data.type === 'available') {
-                    const msg = t('updateAvailable').replace('%v', data.version);
+                    const msg = t('updateAvailableNoDownloading').replace('%v', data.version);
                     window.showToast?.(msg, 'info');
                 } else if (data.type === 'latest') {
                     const msg = t('upToDate').replace('%v', data.version) +
@@ -350,6 +350,30 @@ const Settings = () => {
                                         <Download size={18} />
                                         {t('checkForUpdates')}
                                     </button>
+
+                                    {updateState && updateState.available && !updateState.downloading && !updateState.downloaded && (
+                                        <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                            <div style={{ fontWeight: 700 }}>{t('updateAvailableNoDownloading').replace('%v', updateState.availableVersion)}</div>
+                                            <button className="btn btn-primary" onClick={() => downloadUpdate()}>{t('downloadUpdate')}</button>
+                                            <button className="btn btn-ghost" onClick={() => clearUpdateState()}>{t('cancel')}</button>
+                                        </div>
+                                    )}
+
+                                    {updateState && updateState.downloading && (
+                                        <div style={{ marginTop: '0.75rem', width: '100%' }}>
+                                            <div style={{ fontSize: '0.9rem', marginBottom: '0.25rem' }}>{t('downloadingPercent').replace('%v', updateState.progress)}</div>
+                                            <div style={{ height: '10px', width: '100%', background: 'rgba(0,0,0,0.06)', borderRadius: '6px', overflow: 'hidden' }}>
+                                                <div style={{ height: '100%', width: `${updateState.progress}%`, background: 'linear-gradient(90deg,var(--accent-color), #60a5fa)' }} />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {updateState && updateState.downloaded && (
+                                        <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                            <div style={{ fontWeight: 700 }}>{t('updateDownloaded')}</div>
+                                            <button className="btn btn-primary" onClick={() => installUpdate()}>{t('installNow')}</button>
+                                        </div>
+                                    )}
                                 </div>
                             </section>
                         )}

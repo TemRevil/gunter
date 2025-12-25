@@ -120,6 +120,16 @@ export const StoreProvider = ({ children }) => {
     const [isLicenseValid, setIsLicenseValid] = useState(false);
     const [licenseData, setLicenseData] = useState(null);
 
+    // Updater UI state
+    const [updateState, setUpdateState] = useState({
+        checking: false,
+        available: false,
+        availableVersion: null,
+        downloading: false,
+        progress: 0,
+        downloaded: false
+    });
+
     // SHA-256 Hashing Helper
     const hashKey = async (key) => {
         if (!key) return '';
@@ -519,14 +529,17 @@ export const StoreProvider = ({ children }) => {
         return false;
     };
 
-    // Setup Electron auto-updater IPC listeners (if available)
+    // Setup Electron auto-updater IPC listeners (if available) and manage UI state
     React.useEffect(() => {
         if (!window.electron) return;
 
         const onAvailable = (info) => {
-            addNotification(translations[data.settings.language].updateAvailable.replace('%v', info.version || ''), 'info');
+            // mark available and store version
+            setUpdateState(prev => ({ ...prev, available: true, availableVersion: info.version || null, checking: false }));
+            addNotification(translations[data.settings.language].updateAvailableNoDownloading.replace('%v', info.version || ''), 'info');
         };
         const onDownloaded = (info) => {
+            setUpdateState(prev => ({ ...prev, downloaded: true, downloading: false, progress: 100 }));
             const lang = data.settings?.language || 'en';
             const message = lang === 'ar' ? 'تم تنزيل التحديث. هل تريد تثبيته الآن؟' : 'Update downloaded. Install now?';
             if (window.confirm(message)) {
@@ -536,15 +549,15 @@ export const StoreProvider = ({ children }) => {
             }
         };
         const onError = (err) => {
+            setUpdateState(prev => ({ ...prev, checking: false, downloading: false }));
             const lang = data.settings?.language || 'en';
             addNotification(lang === 'ar' ? 'خطأ في التحديث' : 'Update error', 'danger');
             console.error('Updater error:', err);
         };
         const onProgress = (progress) => {
-            // Simple progress notification - can be improved
-            const lang = data.settings?.language || 'en';
-            if (progress && progress.percent) {
-                addNotification(lang === 'ar' ? `جاري التنزيل: ${Math.round(progress.percent)}%` : `Downloading: ${Math.round(progress.percent)}%`, 'info');
+            // Update UI progress only; do not spam notifications
+            if (progress && typeof progress.percent !== 'undefined') {
+                setUpdateState(prev => ({ ...prev, downloading: true, progress: Math.round(progress.percent) }));
             }
         };
 
@@ -552,6 +565,25 @@ export const StoreProvider = ({ children }) => {
         window.electron.onUpdateDownloaded(onDownloaded);
         window.electron.onUpdateError(onError);
         window.electron.onUpdateDownloadProgress(onProgress);
+
+        // helper functions to trigger updater actions from the renderer
+        const downloadUpdate = () => {
+            if (window.electron?.downloadUpdate) {
+                window.electron.downloadUpdate();
+                setUpdateState(prev => ({ ...prev, downloading: true, progress: 0 }));
+            }
+        };
+        const installUpdate = () => {
+            if (window.electron?.installUpdate) {
+                window.electron.installUpdate();
+            }
+        };
+        const clearUpdateState = () => setUpdateState({ checking: false, available: false, availableVersion: null, downloading: false, progress: 0, downloaded: false });
+
+        // expose helpers to window for simple use (also returned via context below)
+        window._gunterDownloadUpdate = downloadUpdate;
+        window._gunterInstallUpdate = installUpdate;
+        window._gunterClearUpdateState = clearUpdateState;
 
         return () => {
             // No-op: ipcRenderer.on doesn't return unsubscribe; in preload they are simple additions - leave it as-is for now
@@ -581,6 +613,11 @@ export const StoreProvider = ({ children }) => {
         recordDirectTransaction,
         licenseData,
         checkAppUpdates,
+        // Updater helpers & state
+        updateState,
+        downloadUpdate: () => window._gunterDownloadUpdate?.(),
+        installUpdate: () => window._gunterInstallUpdate?.(),
+        clearUpdateState: () => window._gunterClearUpdateState?.(),
         // Short hands for convenience
         operations: data.operations,
         transactions: data.transactions || [],
