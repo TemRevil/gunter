@@ -14,8 +14,8 @@ jobs:
     name: Build and publish (Windows)
     runs-on: windows-latest
     env:
-      GH_TOKEN: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
-      GITHUB_TOKEN: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
+      GH_TOKEN: ${{ secrets.ACTIONS_DEPLOY_TOKEN || github.token }}
+      GITHUB_TOKEN: ${{ secrets.ACTIONS_DEPLOY_TOKEN || github.token }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,6 +30,15 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Confirm publish token
+        shell: bash
+        run: |
+          if [ -z "$GH_TOKEN" ] && [ -z "$GITHUB_TOKEN" ]; then
+            echo "ERROR: No publish token found. Set repository secret ACTIONS_DEPLOY_TOKEN with a token that has Releases write permission, or allow GITHUB_TOKEN permissions." >&2
+            exit 1
+          fi
+          echo "Publish token is available."
 
       - name: Build & publish
         run: npm run electron:build -- --publish=always
