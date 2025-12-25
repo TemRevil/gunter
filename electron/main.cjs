@@ -34,46 +34,7 @@ function createWindow() {
         mainWindow.loadURL('http://localhost:5173');
         mainWindow.webContents.openDevTools();
     } else {
-        const { pathToFileURL } = require('url');
-
-        // Use app.getAppPath(), which will point inside the ASAR when packaged
-        const appBase = app.getAppPath();
-        const indexPath = path.join(appBase, 'dist', 'index.html');
-
-        log.info('Production load — appBase:', appBase, 'resourcesPath:', process.resourcesPath, 'indexPath:', indexPath);
-
-        try {
-            if (fs.existsSync(indexPath)) {
-                log.info('Loading index via loadFile:', indexPath);
-                // Prefer loadFile so Electron handles ASAR transparently
-                mainWindow.loadFile(indexPath);
-            } else {
-                // Fallback: try resourcesPath/app.asar/dist/index.html (explicit ASAR reference)
-                const altPath = path.join(process.resourcesPath, 'app.asar', 'dist', 'index.html');
-                log.warn(`Index not found at ${indexPath}. Trying ${altPath}`);
-                if (fs.existsSync(altPath)) {
-                    log.info('Loading index via loadFile (altPath):', altPath);
-                    mainWindow.loadFile(altPath);
-                } else {
-                    // Last resort: try a file:// URL using indexPath (may include spaces — pathToFileURL will encode)
-                    const fallbackUrl = pathToFileURL(indexPath).href;
-                    log.error(`Neither ${indexPath} nor ${altPath} exist. Attempting to load ${fallbackUrl}`);
-                    mainWindow.loadURL(fallbackUrl);
-                }
-            }
-        } catch (err) {
-            log.error('Error loading index.html:', err);
-        }
-
-        // Helpful diagnostics if something goes wrong while loading renderer
-        mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-            log.error('Renderer failed to load:', { errorCode, errorDescription, validatedURL, isMainFrame });
-        });
-
-        // Also log console messages from the renderer to help debug file-loading issues
-        mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-            log.info('Renderer console message:', { level, message, line, sourceId });
-        });
+        mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
     }
 
     // Wire auto-updater events to renderer

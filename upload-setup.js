@@ -30,7 +30,9 @@ async function uploadSetup() {
         await signInWithEmailAndPassword(auth, "gunter-v@gunter.com", "!@wqsdXD@#1@1");
         console.log('✅ Authenticated as:', auth.currentUser.email);
 
-        const setupPath = join(__dirname, 'release', 'Gunter Management System Setup 1.10.7.exe');
+        const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
+        const version = packageJson.version;
+        const setupPath = join(__dirname, 'release', `Gunter Management System Setup ${version}.exe`);
         const fileBuffer = readFileSync(setupPath);
 
         const storageRef = ref(storage, 'Setup/GunterSetup.exe');
