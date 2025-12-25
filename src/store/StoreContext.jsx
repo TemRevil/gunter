@@ -462,13 +462,21 @@ export const StoreProvider = ({ children }) => {
 
                 const res = await window.electron.checkForUpdates(manual);
 
-                // If update is available, the 'update-available' event listener in useEffect will handle it.
-                // We just need to handle the case where we are up-to-date here if it was a manual check.
-                if (res && res.updateInfo && manual) {
-                    // This part is tricky because 'update-available' event fires async.
-                    // Usually checkForUpdates returns the update check result which contains updateInfo.
+                if (manual) {
+                    const currentVersion = await window.electron.getAppVersion();
+                    // Fallback "Up to date" notification if regular event didn't fire with an update
+                    // We assume that if update was found, the listener handles it. 
+                    // But if we are here and res.updateInfo matches current, or is missing we say up to date.
+
+                    if (res?.updateInfo?.version && res.updateInfo.version === currentVersion) {
+                        addNotification(translations[data.settings.language].upToDate.replace('%v', currentVersion), 'success');
+                    } else if (!res?.updateInfo) {
+                        // Sometimes result is null if no update found
+                        addNotification(translations[data.settings.language].upToDate.replace('%v', currentVersion), 'success');
+                    }
                 }
 
+                setUpdateState(prev => ({ ...prev, checking: false }));
                 return { updateFound: false };
             } catch (err) {
                 console.warn('Electron update check warning:', err);
