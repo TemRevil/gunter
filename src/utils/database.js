@@ -359,7 +359,7 @@ export class Database {
                 theme: 'dark',
                 language: 'ar',
                 loginPassword: '0',
-                adminPassword: '',
+                adminPassword: '0',
                 receiptTitle: '',
                 receiptAddress: '',
                 receiptPhone: '',
