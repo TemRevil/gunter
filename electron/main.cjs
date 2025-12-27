@@ -128,7 +128,7 @@ ipcMain.on('execute-update', (event, { url }) => {
         }
     };
 
-    sendLog('Legacy update execution started...');
+    sendLog('Update execution started...');
     sendLog(`Download URL: ${url}`);
 
     const installerPath = path.join(app.getPath('temp'), 'GunterSetup.exe');
@@ -179,7 +179,7 @@ ipcMain.on('execute-update', (event, { url }) => {
 
             file.on('finish', () => {
                 file.close();
-                sendLog('Download 100% complete!');
+                sendLog('Download 100% complete');
                 sendLog('Launching installer...');
 
                 // Launch the installer

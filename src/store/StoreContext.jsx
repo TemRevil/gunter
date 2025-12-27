@@ -19,13 +19,31 @@ export const StoreProvider = ({ children }) => {
         database.data = data;
         database.save();
 
-        // Also update theme on body
-        if (data.settings.theme === 'dark') {
-            document.documentElement.setAttribute('data-theme', 'dark');
-        } else {
-            document.documentElement.removeAttribute('data-theme');
-        }
-    }, [data]);
+        const applyTheme = () => {
+            const theme = data.settings.theme || 'system';
+            let effectiveTheme = theme;
+
+            if (theme === 'system') {
+                effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+
+            if (effectiveTheme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+            }
+        };
+
+        applyTheme();
+
+        // Listen for system theme changes if in system mode
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        const listener = () => {
+            if (data.settings.theme === 'system') applyTheme();
+        };
+        mediaQuery.addEventListener('change', listener);
+        return () => mediaQuery.removeEventListener('change', listener);
+    }, [data.settings.theme, data]);
 
     useEffect(() => {
         const autoLogin = async () => {
@@ -65,7 +83,9 @@ export const StoreProvider = ({ children }) => {
         availableVersion: null,
         downloading: false,
         progress: 0,
-        downloaded: false
+        downloaded: false,
+        show: false,
+        message: ''
     });
 
     // SHA-256 Hashing Helper
@@ -659,39 +679,78 @@ export const StoreProvider = ({ children }) => {
     React.useEffect(() => {
         if (!window.electron) return;
 
+        const lang = data.settings?.language || 'en';
+        const t = (key) => translations[lang][key] || translations['en'][key] || key;
+
         const onAvailable = (info) => {
-            // mark available and store version
-            setUpdateState(prev => ({ ...prev, available: true, availableVersion: info.version || null, checking: false }));
-            addNotification(translations[data.settings.language].updateAvailableNoDownloading.replace('%v', info.version || ''), 'info');
+            setUpdateState(prev => ({
+                ...prev,
+                checking: false,
+                available: true,
+                availableVersion: info.version,
+                show: true,
+                message: t('updateAvailable').replace('%v', info.version)
+            }));
+            addNotification(t('updateAvailable').replace('%v', info.version), 'info');
         };
         const onNotAvailable = (info) => {
-            // Check if we were actively requesting an update check
-            if (updateState.checking) {
-                const currentV = info.version || 'unknown';
-                addNotification(translations[data.settings.language].upToDate.replace('%v', currentV), 'success');
-            }
-            setUpdateState(prev => ({ ...prev, checking: false }));
+            setUpdateState(prev => ({ ...prev, checking: false, available: false }));
         };
         const onDownloaded = (info) => {
-            setUpdateState(prev => ({ ...prev, downloaded: true, downloading: false, progress: 100 }));
-            const lang = data.settings?.language || 'en';
-            const message = lang === 'ar' ? 'تم تنزيل التحديث. هل تريد تثبيته الآن؟' : 'Update downloaded. Install now?';
-            if (window.confirm(message)) {
-                window.electron.installUpdate();
-            } else {
-                addNotification(lang === 'ar' ? 'التحديث جاهز للتثبيت لاحقًا' : 'Update ready to install', 'info');
-            }
+            setUpdateState(prev => ({
+                ...prev,
+                downloading: false,
+                downloaded: true,
+                progress: 100,
+                message: t('installingUpdate')
+            }));
+            addNotification(t('downloadComplete'), 'info');
+
+            // Automatically install after 2 seconds
+            setTimeout(() => {
+                if (window.electron?.installUpdate) {
+                    window.electron.installUpdate();
+                }
+            }, 2000);
         };
         const onError = (err) => {
-            setUpdateState(prev => ({ ...prev, checking: false, downloading: false }));
-            const lang = data.settings?.language || 'en';
-            addNotification(lang === 'ar' ? 'خطأ في التحديث' : 'Update error', 'danger');
+            setUpdateState(prev => ({ ...prev, checking: false, downloading: false, show: false }));
+            addNotification(t('updateError') || 'Update error', 'danger');
             console.error('Updater error:', err);
         };
         const onProgress = (progress) => {
-            // Update UI progress only; do not spam notifications
             if (progress && typeof progress.percent !== 'undefined') {
-                setUpdateState(prev => ({ ...prev, downloading: true, progress: Math.round(progress.percent) }));
+                setUpdateState(prev => ({
+                    ...prev,
+                    downloading: true,
+                    progress: Math.round(progress.percent),
+                    show: true,
+                    message: `${t('downloading')} ${Math.round(progress.percent)}%`
+                }));
+            }
+        };
+
+        const onLog = (msg) => {
+            console.log(`[Update] ${msg}`);
+            if (msg.includes('Update execution started')) {
+                setUpdateState(prev => ({ ...prev, show: true, progress: 0, message: t('startingUpdate') }));
+            } else if (msg.includes('Downloading:')) {
+                const match = msg.match(/(\d+)%/);
+                if (match) {
+                    setUpdateState(prev => ({
+                        ...prev,
+                        show: true,
+                        progress: parseInt(match[1]),
+                        message: `${t('downloading')} ${match[1]}%`
+                    }));
+                }
+            } else if (msg.includes('Download 100% complete')) {
+                setUpdateState(prev => ({ ...prev, progress: 100, message: t('downloadComplete') }));
+            } else if (msg.includes('Launching installer')) {
+                setUpdateState(prev => ({ ...prev, message: t('installingUpdate') }));
+            } else if (msg.includes('Error')) {
+                setUpdateState(prev => ({ ...prev, message: msg }));
+                setTimeout(() => setUpdateState(prev => ({ ...prev, show: false })), 3000);
             }
         };
 
@@ -700,12 +759,12 @@ export const StoreProvider = ({ children }) => {
         window.electron.onUpdateDownloaded(onDownloaded);
         window.electron.onUpdateError(onError);
         window.electron.onUpdateDownloadProgress(onProgress);
+        window.electron.onUpdateLog(onLog);
 
-        // helper functions to trigger updater actions from the renderer
         const downloadUpdate = () => {
             if (window.electron?.downloadUpdate) {
                 window.electron.downloadUpdate();
-                setUpdateState(prev => ({ ...prev, downloading: true, progress: 0 }));
+                setUpdateState(prev => ({ ...prev, downloading: true, progress: 0, show: true, message: t('startingUpdate') }));
             }
         };
         const installUpdate = () => {
@@ -713,16 +772,13 @@ export const StoreProvider = ({ children }) => {
                 window.electron.installUpdate();
             }
         };
-        const clearUpdateState = () => setUpdateState({ checking: false, available: false, availableVersion: null, downloading: false, progress: 0, downloaded: false });
+        const clearUpdateState = () => setUpdateState({ checking: false, available: false, availableVersion: null, downloading: false, progress: 0, downloaded: false, show: false, message: '' });
 
-        // expose helpers to window for simple use (also returned via context below)
         window._gunterDownloadUpdate = downloadUpdate;
         window._gunterInstallUpdate = installUpdate;
         window._gunterClearUpdateState = clearUpdateState;
 
-        return () => {
-            // No-op: ipcRenderer.on doesn't return unsubscribe; in preload they are simple additions - leave it as-is for now
-        };
+        return () => { };
     }, [data.settings.language]);
 
     const value = {
@@ -748,15 +804,14 @@ export const StoreProvider = ({ children }) => {
         importData,
         setData,
         recordDirectTransaction,
+        checkAppUpdates,
+        updateState,
+        downloadUpdate: window._gunterDownloadUpdate,
+        installUpdate: window._gunterInstallUpdate,
+        clearUpdateState: window._gunterClearUpdateState,
         finishSession: () => setData(prev => ({ ...prev, activeSessionDate: null })),
         activeSessionDate: data.activeSessionDate,
         licenseData,
-        checkAppUpdates,
-        // Updater helpers & state
-        updateState,
-        downloadUpdate: () => window._gunterDownloadUpdate?.(),
-        installUpdate: () => window._gunterInstallUpdate?.(),
-        clearUpdateState: () => window._gunterClearUpdateState?.(),
         // Short hands for convenience
         operations: data.operations,
         transactions: data.transactions || [],

@@ -26,5 +26,7 @@ contextBridge.exposeInMainWorld('electron', {
     onUpdateError: (callback) => ipcRenderer.on('update-error', (_event, err) => callback(err)),
     onUpdateDownloadProgress: (callback) => ipcRenderer.on('update-download-progress', (_event, progress) => callback(progress)),
     // Listen for update logs (legacy)
-    onUpdateLog: (callback) => ipcRenderer.on('update-log', (_event, value) => callback(value))
+    onUpdateLog: (callback) => ipcRenderer.on('update-log', (_event, value) => callback(value)),
+    // Trigger legacy downloader for specific URL
+    executeUpdate: (url) => ipcRenderer.send('execute-update', { url })
 });

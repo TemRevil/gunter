@@ -222,6 +222,14 @@ export const translations = {
         pinnedVersionActive: 'مثبت حالياً',
         fetchingReleases: 'جاري جلب الإصدارات...',
         applyVersionConfirm: 'هل أنت متأكد من رغبتك في تحميل هذا الإصدار والعودة إليه؟ سيتم فتح الرابط في المتصفح لتحميل المثبت.',
+        themeMode: 'وضع اللون',
+        system: 'النظام',
+        light: 'فاتح',
+        dark: 'داكن',
+        startingUpdate: 'بدء التحديث...',
+        downloading: 'جاري التحميل...',
+        downloadComplete: 'اكتمل التحميل!',
+        installingUpdate: 'جاري تثبيت التحديث...',
     },
     en: {
         appName: 'Gunter',
@@ -446,5 +454,13 @@ export const translations = {
         pinnedVersionActive: 'Pinned',
         fetchingReleases: 'Fetching releases...',
         applyVersionConfirm: 'Are you sure you want to download and go back to this version? This will open the download link in your browser.',
+        themeMode: 'Theme Mode',
+        system: 'System',
+        light: 'Light',
+        dark: 'Dark',
+        startingUpdate: 'Starting update...',
+        downloading: 'Downloading...',
+        downloadComplete: 'Download complete!',
+        installingUpdate: 'Installing update...',
     }
 };

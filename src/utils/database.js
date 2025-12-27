@@ -356,8 +356,8 @@ export class Database {
             transactions: [],
             notifications: [],
             settings: {
-                theme: 'dark',
-                language: 'ar',
+                theme: 'system',
+                language: 'en',
                 loginPassword: '0',
                 adminPassword: '0',
                 receiptTitle: '',

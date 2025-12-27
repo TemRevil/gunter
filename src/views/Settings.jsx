@@ -145,6 +145,7 @@ const Settings = () => {
     const [appVersion, setAppVersion] = useState('1.0.0');
     const [releases, setReleases] = useState([]);
     const [fetching, setFetching] = useState(false);
+    const [selectedVersion, setSelectedVersion] = useState('');
 
     React.useEffect(() => {
         if (window.electron?.getAppVersion) {
@@ -157,11 +158,13 @@ const Settings = () => {
                 const response = await fetch('https://api.github.com/repos/TemRevil/gunter/releases');
                 const data = await response.json();
                 if (Array.isArray(data)) {
-                    setReleases(data.map(rel => ({
+                    const fetchedReleases = data.map(rel => ({
                         version: rel.tag_name.replace('v', ''),
                         date: new Date(rel.published_at).toLocaleDateString(),
                         url: rel.assets.find(a => a.name.endsWith('.exe'))?.browser_download_url || rel.html_url
-                    })));
+                    }));
+                    setReleases(fetchedReleases);
+                    if (fetchedReleases.length > 0) setSelectedVersion(fetchedReleases[0].version);
                 }
             } catch (err) {
                 console.error("Failed to fetch releases:", err);
@@ -180,16 +183,19 @@ const Settings = () => {
             settings: {
                 ...prev.settings,
                 pinnedVersion: isPinned ? null : version,
-                autoCheckUpdates: isPinned ? true : false // Disable updates if pinning
+                autoCheckUpdates: isPinned ? true : false
             }
         }));
         window.showToast?.(isPinned ? t('unpinVersion') : t('pinnedVersionActive'), 'success');
     };
 
-    const handleRollback = (rel) => {
+    const handleRollback = (version) => {
+        const rel = releases.find(r => r.version === version);
+        if (!rel) return;
+
         window.customConfirm?.(t('rollbackUpdate'), t('applyVersionConfirm'), () => {
-            if (window.electron?.openExternal) {
-                window.electron.openExternal(rel.url);
+            if (window.electron?.executeUpdate) {
+                window.electron.executeUpdate(rel.url);
             } else {
                 window.open(rel.url, '_blank');
             }
@@ -318,43 +324,52 @@ const Settings = () => {
                 return (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
                         <section className="settings-section-card" style={{ padding: '1.5rem' }}>
-                            <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
-                                <div className="settings-section-icon appearance" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-color)', width: '40px', height: '40px' }}>
-                                    <Globe size={20} />
-                                </div>
-                                <div>
-                                    <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('language')}</h3>
-                                </div>
+                            <header className="settings-section-header" style={{ width: '100%', marginBottom: '1.5rem', paddingBottom: '1rem' }}>
+                                <div className="settings-section-icon appearance" style={{ width: '40px', height: '40px' }}><Globe size={20} /></div>
+                                <div><h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('appearanceAndLanguage')}</h3></div>
                             </header>
-                            <div className="settings-button-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem', width: '100%' }}>
-                                <button className={`btn ${settings.language === 'ar' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setLanguage('ar')} style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)' }}>العربية</button>
-                                <button className={`btn ${settings.language === 'en' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setLanguage('en')} style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)' }}>English</button>
-                            </div>
-                        </section>
 
-                        <section className="settings-section-card" style={{ padding: '1.5rem' }}>
-                            <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
-                                <div className="settings-section-icon appearance" style={{ width: '40px', height: '40px' }}>
-                                    {settings.theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}
-                                </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                 <div>
-                                    <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('appearanceAndLanguage')}</h3>
+                                    <label style={{ fontSize: '0.85rem', marginBottom: '0.5rem', display: 'block', opacity: 0.7 }}>{t('language')}</label>
+                                    <div className="settings-button-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                        <button className={`btn ${settings.language === 'ar' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setLanguage('ar')} style={{ padding: '0.75rem' }}>العربية</button>
+                                        <button className={`btn ${settings.language === 'en' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setLanguage('en')} style={{ padding: '0.75rem' }}>English</button>
+                                    </div>
                                 </div>
-                            </header>
-                            <div className="settings-item-row" onClick={toggleTheme} style={{ padding: '0.75rem', marginBottom: '0.5rem' }}>
-                                <div><span className="settings-item-label">{t('darkMode')}</span></div>
-                                <div className={`toggle-switch ${settings.theme === 'dark' ? 'active' : ''}`}><div className="toggle-knob" /></div>
-                            </div>
-                            <div className="settings-item-row" onClick={() => toggleSecurity('showSessionBalance')} style={{ padding: '0.75rem', marginBottom: '0.5rem' }}>
-                                <div><span className="settings-item-label">{settings.language === 'ar' ? 'إظهار الرصيد اليومي' : 'Show Daily Balance'}</span></div>
-                                <div className={`toggle-switch ${settings?.security?.showSessionBalance ? 'active' : ''}`}><div className="toggle-knob" /></div>
-                            </div>
-                            <div className="settings-item-row" onClick={() => setData(prev => ({ ...prev, settings: { ...prev.settings, autoStartNewDay: !prev.settings.autoStartNewDay } }))} style={{ padding: '0.75rem' }}>
+
                                 <div>
-                                    <span className="settings-item-label">{t('autoStartNewDay')}</span>
-                                    <span className="settings-item-subtext">{settings.language === 'ar' ? 'بدء يوم جديد تلقائياً عند تغيير وقت النظام' : 'Automatically start new day when system clock changes'}</span>
+                                    <label style={{ fontSize: '0.85rem', marginBottom: '0.5rem', display: 'block', opacity: 0.7 }}>{t('themeMode')}</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                                        {[
+                                            { id: 'light', icon: <Sun size={16} />, label: t('light') },
+                                            { id: 'dark', icon: <Moon size={16} />, label: t('dark') },
+                                            { id: 'system', icon: <Globe size={16} />, label: t('system') }
+                                        ].map(mode => (
+                                            <button
+                                                key={mode.id}
+                                                className={`btn ${settings.theme === mode.id ? 'btn-primary' : 'btn-secondary'}`}
+                                                onClick={() => setData(prev => ({ ...prev, settings: { ...prev.settings, theme: mode.id } }))}
+                                                style={{ padding: '0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                                            >
+                                                {mode.icon} {mode.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                                <div className={`toggle-switch ${settings.autoStartNewDay ? 'active' : ''}`}><div className="toggle-knob" /></div>
+
+                                <div className="settings-item-row" onClick={() => toggleSecurity('showSessionBalance')} style={{ padding: '0.75rem' }}>
+                                    <div><span className="settings-item-label">{settings.language === 'ar' ? 'إظهار الرصيد اليومي' : 'Show Daily Balance'}</span></div>
+                                    <div className={`toggle-switch ${settings?.security?.showSessionBalance ? 'active' : ''}`}><div className="toggle-knob" /></div>
+                                </div>
+
+                                <div className="settings-item-row" onClick={() => setData(prev => ({ ...prev, settings: { ...prev.settings, autoStartNewDay: !prev.settings.autoStartNewDay } }))} style={{ padding: '0.75rem' }}>
+                                    <div>
+                                        <span className="settings-item-label">{t('autoStartNewDay')}</span>
+                                        <span className="settings-item-subtext">{settings.language === 'ar' ? 'بدء يوم جديد تلقائياً عند تغيير وقت النظام' : 'Automatically start new day when system clock changes'}</span>
+                                    </div>
+                                    <div className={`toggle-switch ${settings.autoStartNewDay ? 'active' : ''}`}><div className="toggle-knob" /></div>
+                                </div>
                             </div>
                         </section>
 
@@ -385,9 +400,7 @@ const Settings = () => {
                                     <div className="settings-section-icon security" style={{ background: 'rgba(139, 92, 246, 0.1)', color: 'var(--accent-color)', width: '40px', height: '40px' }}>
                                         <Download size={20} />
                                     </div>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('checkForUpdates')}</h3>
-                                    </div>
+                                    <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('checkForUpdates')}</h3>
                                 </header>
                                 <div className="settings-item-row" onClick={() => {
                                     setData(prev => ({
@@ -410,58 +423,44 @@ const Settings = () => {
                                         <Download size={18} /> {t('checkForUpdates')}
                                     </button>
 
-                                    <div style={{ marginTop: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                                    <div style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
                                             <History size={16} />
                                             <h4 style={{ margin: 0 }}>{t('releases')}</h4>
-                                            {fetching && <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>({t('fetchingReleases')})</span>}
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '0.5rem' }}>
-                                            {releases.map(rel => {
-                                                const isCurrent = rel.version === appVersion;
-                                                const isPinned = settings.pinnedVersion === rel.version;
-                                                return (
-                                                    <div key={rel.version} style={{
-                                                        display: 'flex',
-                                                        justifyContent: 'space-between',
-                                                        alignItems: 'center',
-                                                        padding: '0.75rem',
-                                                        background: 'var(--bg-body)',
-                                                        borderRadius: 'var(--radius-md)',
-                                                        border: isPinned ? '1px solid var(--accent-color)' : '1px solid transparent',
-                                                        boxShadow: isPinned ? '0 0 10px rgba(59, 130, 246, 0.1)' : 'none'
-                                                    }}>
-                                                        <div style={{ flex: 1 }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                                <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>v{rel.version}</span>
-                                                                {isCurrent && <span className="badge success" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>Current</span>}
-                                                                {isPinned && <span className="badge info" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', background: 'var(--accent-color)', color: 'white' }}>Pinned</span>}
-                                                            </div>
-                                                            <div style={{ fontSize: '0.75rem', opacity: 0.5 }}>{rel.date}</div>
-                                                        </div>
-                                                        <div style={{ display: 'flex', gap: '0.4rem' }}>
-                                                            <button
-                                                                className={`btn btn-icon ${isPinned ? 'active' : ''}`}
-                                                                title={isPinned ? t('unpinVersion') : t('pinVersion')}
-                                                                onClick={() => togglePinVersion(rel.version)}
-                                                                style={{ padding: '0.4rem', color: isPinned ? 'var(--accent-color)' : 'inherit' }}
-                                                            >
-                                                                <Lock size={16} />
-                                                            </button>
-                                                            {!isCurrent && (
-                                                                <button
-                                                                    className="btn btn-secondary btn-sm"
-                                                                    onClick={() => handleRollback(rel)}
-                                                                    style={{ gap: '0.4rem', boxPadding: '0.4rem 0.75rem' }}
-                                                                >
-                                                                    <RotateCcw size={14} /> {t('rollbackUpdate')}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
+
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <select
+                                                value={selectedVersion}
+                                                onChange={(e) => setSelectedVersion(e.target.value)}
+                                                style={{ flex: 1, padding: '0.75rem' }}
+                                            >
+                                                {releases.map(rel => (
+                                                    <option key={rel.version} value={rel.version}>
+                                                        v{rel.version} ({rel.date}) {rel.version === appVersion ? `[${t('current')}]` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                className="btn btn-primary"
+                                                onClick={() => handleRollback(selectedVersion)}
+                                                disabled={selectedVersion === appVersion && !fetching}
+                                            >
+                                                <RotateCcw size={16} />
+                                            </button>
+                                            <button
+                                                className={`btn ${settings.pinnedVersion === selectedVersion ? 'btn-primary' : 'btn-secondary'}`}
+                                                onClick={() => togglePinVersion(selectedVersion)}
+                                                title={t('pinVersion')}
+                                            >
+                                                <Lock size={16} />
+                                            </button>
                                         </div>
+                                        {settings.pinnedVersion && (
+                                            <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--accent-color)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <Lock size={12} /> {t('pinnedVersionActive')}: v{settings.pinnedVersion}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </section>

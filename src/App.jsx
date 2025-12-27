@@ -12,12 +12,13 @@ import EndSessionModal from './components/EndSessionModal';
 import Toast from './components/Toast';
 import ConfirmDialog from './components/ConfirmDialog';
 import AdminAuthModal from './components/AdminAuthModal';
-import { Menu } from 'lucide-react';
+import { Menu, Download } from 'lucide-react';
 
 function App() {
     const {
         isLicensed, activateLicense, settings,
-        notifications, checkAppUpdates, activeSessionDate, finishSession
+        notifications, checkAppUpdates, activeSessionDate, finishSession,
+        updateState
     } = useStore();
 
     const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -90,37 +91,6 @@ function App() {
         return () => clearInterval(interval);
     }, [isLoggedIn, activeSessionDate]);
 
-    const [updateState, setUpdateState] = useState({ show: false, progress: 0, message: '' });
-
-    useEffect(() => {
-        if (window.electron?.onUpdateLog) {
-            window.electron.onUpdateLog((msg) => {
-                console.log(`[Update Operation] ${msg}`);
-
-                if (msg.includes('Update execution started')) {
-                    setUpdateState({ show: true, progress: 0, message: 'بدء التحديث...' });
-                } else if (msg.includes('Downloading:')) {
-                    const match = msg.match(/(\d+)%/);
-                    if (match) {
-                        setUpdateState(prev => ({
-                            ...prev,
-                            show: true,
-                            progress: parseInt(match[1]),
-                            message: `جاري التحميل... ${match[1]}%`
-                        }));
-                    }
-                } else if (msg.includes('Download complete')) {
-                    setUpdateState(prev => ({ ...prev, progress: 100, message: 'اكتمل التحميل!' }));
-                } else if (msg.includes('Launching installer')) {
-                    setUpdateState(prev => ({ ...prev, message: 'جاري تثبيت التحديث...' }));
-                } else if (msg.includes('Error')) {
-                    setUpdateState(prev => ({ ...prev, message: `خطأ: ${msg}` }));
-                    setTimeout(() => setUpdateState(prev => ({ ...prev, show: false })), 3000);
-                }
-            });
-        }
-    }, []);
-
     const renderTabContent = () => {
         switch (currentTab) {
             case 'operations': return <Operations />;
@@ -147,18 +117,36 @@ function App() {
     return (
         <div key={settings.theme} data-theme={settings.theme}>
             {updateState.show && (
-                <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999 }}>
-                    <div className="modal-content" style={{ textAlign: 'center', padding: '2rem', width: '400px', maxWidth: '90%' }}>
-                        <h3 style={{ marginBottom: '1rem' }}>تحديث النظام</h3>
-                        <p style={{ marginBottom: '1rem' }}>{updateState.message}</p>
+                <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)' }}>
+                    <div className="modal-content" style={{
+                        textAlign: 'center',
+                        padding: '2.5rem',
+                        width: '450px',
+                        maxWidth: '90%',
+                        background: 'var(--bg-glass-modal)',
+                        border: '1px solid var(--border-color)',
+                        boxShadow: 'var(--shadow-xl)',
+                        borderRadius: 'var(--radius-xl)'
+                    }}>
+                        <div style={{ marginBottom: '1.5rem', color: 'var(--accent-color)' }}>
+                            <Download size={48} className="spin-slow" />
+                        </div>
+                        <h3 style={{ marginBottom: '0.75rem', fontWeight: 800 }}>{settings.language === 'ar' ? 'تحديث النظام' : 'System Update'}</h3>
+                        <p style={{ marginBottom: '1.5rem', fontSize: '1rem', opacity: 0.8 }}>{updateState.message}</p>
                         <div style={{
-                            width: '100%', height: '10px', background: 'var(--border)',
-                            borderRadius: '5px', overflow: 'hidden'
+                            width: '100%', height: '12px', background: 'var(--bg-input)',
+                            borderRadius: 'var(--radius-pill)', overflow: 'hidden',
+                            border: '1px solid var(--border-color)'
                         }}>
                             <div style={{
                                 width: `${updateState.progress}%`, height: '100%',
-                                background: 'var(--primary)', transition: 'width 0.3s ease'
+                                background: 'linear-gradient(90deg, var(--accent-color), #60a5fa)',
+                                transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: '0 0 10px rgba(59, 130, 246, 0.4)'
                             }}></div>
+                        </div>
+                        <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', fontWeight: 700, opacity: 0.6 }}>
+                            {updateState.progress}%
                         </div>
                     </div>
                 </div>
