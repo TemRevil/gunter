@@ -118,6 +118,101 @@ ipcMain.handle('install-update', () => {
     }
 });
 
+// Implementation of download-from-url to support rollback as an update
+ipcMain.handle('download-from-url', async (event, { url }) => {
+    const mainWindow = BrowserWindow.getAllWindows()[0];
+    const sendLog = (msg) => {
+        console.log(msg);
+        if (mainWindow) {
+            mainWindow.webContents.send('update-log', msg);
+        }
+    };
+
+    sendLog(`Starting download from URL: ${url}`);
+    const installerPath = path.join(app.getPath('temp'), 'GunterSetup.exe');
+
+    return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(installerPath);
+
+        const download = (downloadUrl) => {
+            https.get(downloadUrl, (response) => {
+                if (response.statusCode === 302 || response.statusCode === 301) {
+                    download(response.headers.location);
+                    return;
+                }
+
+                if (response.statusCode !== 200) {
+                    file.close();
+                    fs.unlinkSync(installerPath);
+                    reject(new Error(`Download failed: ${response.statusCode}`));
+                    return;
+                }
+
+                const totalSize = parseInt(response.headers['content-length'], 10);
+                let downloadedSize = 0;
+
+                response.on('data', (chunk) => {
+                    downloadedSize += chunk.length;
+                    const percent = (downloadedSize / totalSize) * 100;
+                    if (mainWindow) {
+                        mainWindow.webContents.send('update-download-progress', {
+                            percent: percent,
+                            bytesPerSecond: 0,
+                            transferred: downloadedSize,
+                            total: totalSize
+                        });
+                    }
+                });
+
+                response.pipe(file);
+
+                file.on('finish', () => {
+                    file.close();
+                    sendLog('Download complete');
+                    if (mainWindow) {
+                        mainWindow.webContents.send('update-downloaded', {
+                            version: 'rollback',
+                            downloadedFile: installerPath
+                        });
+                    }
+
+                    // We also need a way to trigger the installation of this specific file
+                    // But we can just use the same logic as install-update if we modify quitAndInstall?
+                    // No, quitAndInstall is specifically for autoUpdater downloads.
+                    // For custom downloads, we use the spawn logic.
+                    resolve(installerPath);
+                });
+
+                file.on('error', (err) => {
+                    fs.unlinkSync(installerPath);
+                    reject(err);
+                });
+            }).on('error', (err) => {
+                fs.unlinkSync(installerPath);
+                reject(err);
+            });
+        };
+
+        download(url);
+    });
+});
+
+ipcMain.handle('install-from-path', (event, { filePath }) => {
+    try {
+        spawn('cmd.exe', ['/c', 'start', '""', filePath], {
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: false
+        }).unref();
+
+        setTimeout(() => app.quit(), 2000);
+        return true;
+    } catch (err) {
+        log.error('install-from-path failed', err);
+        throw err;
+    }
+});
+
 
 
 app.whenReady().then(async () => {

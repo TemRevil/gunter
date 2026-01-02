@@ -84,7 +84,9 @@ export const StoreProvider = ({ children }) => {
         progress: 0,
         downloaded: false,
         show: false,
-        message: ''
+        message: '',
+        lastDownloadedPath: null,
+        isRollback: false
     });
 
     // SHA-256 Hashing Helper
@@ -683,32 +685,39 @@ export const StoreProvider = ({ children }) => {
         const t = (key) => translations[lang][key] || translations['en'][key] || key;
 
         const onAvailable = (info) => {
+            console.log('📢 [Update Available] Version:', info.version);
             setUpdateState(prev => ({
                 ...prev,
                 checking: false,
                 available: true,
                 availableVersion: info.version,
                 show: true,
-                message: t('updateAvailable').replace('%v', info.version)
+                message: t('updateAvailableNoDownloading').replace('%v', info.version)
             }));
-            addNotification(t('updateAvailable').replace('%v', info.version), 'info');
+            addNotification(t('updateAvailableNoDownloading').replace('%v', info.version), 'info');
         };
         const onNotAvailable = (info) => {
             setUpdateState(prev => ({ ...prev, checking: false, available: false }));
         };
         const onDownloaded = (info) => {
+            console.log('✅ [Update Downloaded] Info:', info);
             setUpdateState(prev => ({
                 ...prev,
                 downloading: false,
                 downloaded: true,
                 progress: 100,
-                message: t('installingUpdate')
+                message: t('installingUpdate'),
+                lastDownloadedPath: info.downloadedFile || null
             }));
             addNotification(t('downloadComplete'), 'info');
 
             // Automatically install after 2 seconds
             setTimeout(() => {
-                if (window.electron?.installUpdate) {
+                if (updateState.lastDownloadedPath || info.downloadedFile) {
+                    if (window.electron?.installFromPath) {
+                        window.electron.installFromPath(info.downloadedFile || updateState.lastDownloadedPath);
+                    }
+                } else if (window.electron?.installUpdate) {
                     window.electron.installUpdate();
                 }
             }, 2000);
@@ -738,7 +747,7 @@ export const StoreProvider = ({ children }) => {
 
         const onLog = (msg) => {
             console.log(`[Update] ${msg}`);
-            if (msg.includes('Update execution started')) {
+            if (msg.includes('Update execution started') || msg.includes('Starting download from URL')) {
                 setUpdateState(prev => ({ ...prev, show: true, progress: 0, message: t('startingUpdate') }));
             } else if (msg.includes('Downloading:')) {
                 const match = msg.match(/(\d+)%/);
@@ -800,16 +809,59 @@ export const StoreProvider = ({ children }) => {
         };
         const installUpdate = () => {
             console.log('📦 [Update Install] Installing update...');
-            if (window.electron?.installUpdate) {
+            if (updateState.lastDownloadedPath && window.electron?.installFromPath) {
+                window.electron.installFromPath(updateState.lastDownloadedPath);
+                console.log('✅ [Update Install] Triggered from path');
+            } else if (window.electron?.installUpdate) {
                 window.electron.installUpdate();
-                console.log('✅ [Update Install] Triggered');
+                console.log('✅ [Update Install] Triggered via autoUpdater');
             } else {
                 console.error('❌ [Update Install] Not available');
             }
         };
-        const clearUpdateState = () => setUpdateState({ checking: false, available: false, availableVersion: null, downloading: false, progress: 0, downloaded: false, show: false, message: '' });
+
+        const downloadRollback = async (url, version) => {
+            console.log(`🔄 [Rollback Download] Version ${version} from ${url}`);
+            if (window.electron?.downloadFromUrl) {
+                setUpdateState({
+                    checking: false,
+                    available: false,
+                    availableVersion: version,
+                    downloading: true,
+                    progress: 0,
+                    downloaded: false,
+                    show: true,
+                    message: t('startingUpdate'),
+                    lastDownloadedPath: null,
+                    isRollback: true
+                });
+
+                try {
+                    await window.electron.downloadFromUrl(url);
+                    console.log('✅ [Rollback Download] Initiated');
+                } catch (err) {
+                    console.error('❌ [Rollback Download] Error:', err);
+                    setUpdateState(prev => ({ ...prev, downloading: false, show: false }));
+                    addNotification(t('downloadError') || 'Download failed', 'danger');
+                }
+            }
+        };
+
+        const clearUpdateState = () => setUpdateState({
+            checking: false,
+            available: false,
+            availableVersion: null,
+            downloading: false,
+            progress: 0,
+            downloaded: false,
+            show: false,
+            message: '',
+            lastDownloadedPath: null,
+            isRollback: false
+        });
 
         window._gunterDownloadUpdate = downloadUpdate;
+        window._gunterDownloadRollback = downloadRollback;
         window._gunterInstallUpdate = installUpdate;
         window._gunterClearUpdateState = clearUpdateState;
 
@@ -842,6 +894,7 @@ export const StoreProvider = ({ children }) => {
         checkAppUpdates,
         updateState,
         downloadUpdate: window._gunterDownloadUpdate,
+        downloadRollback: window._gunterDownloadRollback,
         installUpdate: window._gunterInstallUpdate,
         clearUpdateState: window._gunterClearUpdateState,
         finishSession: () => setData(prev => ({ ...prev, activeSessionDate: null })),

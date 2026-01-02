@@ -27,6 +27,12 @@ contextBridge.exposeInMainWorld('electron', {
     onUpdateDownloadProgress: (callback) => ipcRenderer.on('update-download-progress', (_event, progress) => callback(progress)),
     // Listen for update logs (legacy)
     onUpdateLog: (callback) => ipcRenderer.on('update-log', (_event, value) => callback(value)),
-    // Trigger legacy downloader for specific URL
-    executeUpdate: (url) => ipcRenderer.send('execute-update', { url })
+    // Custom download/install for rollbacks
+    downloadFromUrl: (url) => ipcRenderer.invoke('download-from-url', { url }),
+    installFromPath: (filePath) => ipcRenderer.invoke('install-from-path', { filePath }),
+    // Open external URL
+    openExternal: (url) => {
+        const { shell } = require('electron');
+        shell.openExternal(url);
+    }
 });

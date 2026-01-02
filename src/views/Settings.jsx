@@ -167,7 +167,7 @@ const Settings = () => {
     const {
         settings, toggleTheme, updateReceiptSettings,
         exportData, importData, setData, data, t, licenseData,
-        checkAppUpdates, updateState, downloadUpdate, installUpdate, clearUpdateState,
+        checkAppUpdates, updateState, downloadUpdate, downloadRollback, installUpdate, clearUpdateState,
         checkLicenseConnection
     } = useContext(StoreContext);
 
@@ -226,19 +226,11 @@ const Settings = () => {
             return;
         }
 
-        console.log(`🔄 [Rollback] Downloading version ${version} from:`, rel.url);
+        console.log(`🔄 [Rollback] User rolling back to version ${version} from:`, rel.url);
 
         window.customConfirm?.(t('rollbackUpdate'), `${t('applyVersionConfirm')} v${version}?`, async () => {
-            console.log('📥 [Rollback] User confirmed, opening download...');
-
-            // Open the download URL
-            if (window.electron?.openExternal) {
-                window.electron.openExternal(rel.url);
-                window.showToast?.(`Downloading v${version}...`, 'info');
-            } else {
-                window.open(rel.url, '_blank');
-                window.showToast?.(`Opening download for v${version}...`, 'info');
-            }
+            console.log('📥 [Rollback] User confirmed, starting in-app rollback download...');
+            downloadRollback(rel.url, version);
         });
     };
 
