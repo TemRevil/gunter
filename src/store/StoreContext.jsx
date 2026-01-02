@@ -704,13 +704,19 @@ export const StoreProvider = ({ children }) => {
         };
         const onProgress = (progress) => {
             if (progress && typeof progress.percent !== 'undefined') {
+                const percent = Math.round(progress.percent);
                 setUpdateState(prev => ({
                     ...prev,
                     downloading: true,
-                    progress: Math.round(progress.percent),
+                    progress: percent,
                     show: true,
-                    message: `${t('downloading')} ${Math.round(progress.percent)}%`
+                    message: `${t('downloading')} ${percent}%`
                 }));
+
+                // If stuck at 0% for too long, something is wrong
+                if (percent === 0) {
+                    console.warn('Download progress at 0%');
+                }
             }
         };
 
@@ -745,10 +751,30 @@ export const StoreProvider = ({ children }) => {
         window.electron.onUpdateDownloadProgress(onProgress);
         window.electron.onUpdateLog(onLog);
 
-        const downloadUpdate = () => {
+        const downloadUpdate = async () => {
             if (window.electron?.downloadUpdate) {
-                window.electron.downloadUpdate();
                 setUpdateState(prev => ({ ...prev, downloading: true, progress: 0, show: true, message: t('startingUpdate') }));
+
+                try {
+                    // Add timeout for download start
+                    const downloadTimeout = setTimeout(() => {
+                        console.warn('Download timeout - no progress detected');
+                        setUpdateState(prev => ({
+                            ...prev,
+                            downloading: false,
+                            show: false,
+                            message: ''
+                        }));
+                        addNotification(t('downloadError') || 'Download timed out', 'danger');
+                    }, 60000); // 60 second timeout
+
+                    await window.electron.downloadUpdate();
+                    clearTimeout(downloadTimeout);
+                } catch (err) {
+                    console.error('Download error:', err);
+                    setUpdateState(prev => ({ ...prev, downloading: false, show: false }));
+                    addNotification(t('downloadError') || 'Download failed', 'danger');
+                }
             }
         };
         const installUpdate = () => {
