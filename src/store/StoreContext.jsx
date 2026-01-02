@@ -103,7 +103,15 @@ export const StoreProvider = ({ children }) => {
             return false;
         }
 
-        if (!navigator.onLine) return true;
+        // Offline mode: Allow access if license key exists locally
+        if (!navigator.onLine) {
+            console.log("🔒 Offline mode detected - allowing access with stored license key");
+            if (!code) {
+                setIsLicenseValid(true);
+                // Keep existing license data if available
+            }
+            return true;
+        }
 
         try {
             const docRef = doc(db, "Activision Keys", keyToCheck.trim());
@@ -114,17 +122,21 @@ export const StoreProvider = ({ children }) => {
                     setIsLicenseValid(true);
                     setLicenseData(docSnap.data());
                 }
+                console.log("✅ License validated successfully");
                 return true;
             } else {
                 if (!code) {
                     setIsLicenseValid(false);
                     setLicenseData(null);
                 }
+                console.log("❌ License validation failed - invalid or unused key");
                 return false;
             }
         } catch (error) {
-            console.error("License check failed:", error);
-            if (error.message?.includes('network') || error.code === 'unavailable') {
+            console.error("⚠️ License check error:", error);
+            // Network errors during validation - allow offline access
+            if (error.message?.includes('network') || error.code === 'unavailable' || error.code === 'permission-denied') {
+                console.log("🔒 Network error - allowing offline access with stored license");
                 if (!code) setIsLicenseValid(true);
                 return true;
             } else {
