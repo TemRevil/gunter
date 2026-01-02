@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { translations } from '../utils/translations';
-import { db, auth, storage } from '../firebase';
+import { db, auth } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { ref, getDownloadURL } from 'firebase/storage';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { Database, validators, generateId } from '../utils/database';
 
@@ -97,45 +96,50 @@ export const StoreProvider = ({ children }) => {
         return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     };
 
-    useEffect(() => {
-        const validateCurrentLicense = async () => {
-            if (!data.settings.license) {
-                setIsLicenseValid(false);
-                return;
-            }
+    const checkLicense = async (code) => {
+        const keyToCheck = code || data.settings.license;
+        if (!keyToCheck) {
+            if (!code) setIsLicenseValid(false);
+            return false;
+        }
 
-            // Offline mode: Allow entry if a license key exists
-            if (!navigator.onLine) {
-                console.log("Device is offline. Using local license key for access.");
-                setIsLicenseValid(true);
-                return;
-            }
+        if (!navigator.onLine) return true;
 
-            try {
-                // Check Firestore for the license key
-                const docRef = doc(db, "Activision Keys", data.settings.license.trim());
-                const docSnap = await getDoc(docRef);
+        try {
+            const docRef = doc(db, "Activision Keys", keyToCheck.trim());
+            const docSnap = await getDoc(docRef);
 
-                if (docSnap.exists() && docSnap.data().Status === "Used") {
+            if (docSnap.exists() && docSnap.data().Status === "Used") {
+                if (!code) {
                     setIsLicenseValid(true);
                     setLicenseData(docSnap.data());
-                } else {
-                    // If online and key not found or not "Used", reject
+                }
+                return true;
+            } else {
+                if (!code) {
                     setIsLicenseValid(false);
                     setLicenseData(null);
                 }
-            } catch (error) {
-                console.error("License validation failed:", error);
-                // If network error during validation while thinking we are online, still allow access
-                if (error.message?.includes('network') || error.code === 'unavailable') {
-                    setIsLicenseValid(true);
-                } else {
-                    setIsLicenseValid(false);
-                    setLicenseData(null);
-                }
+                return false;
             }
-        };
+        } catch (error) {
+            console.error("License check failed:", error);
+            if (error.message?.includes('network') || error.code === 'unavailable') {
+                if (!code) setIsLicenseValid(true);
+                return true;
+            } else {
+                if (!code) {
+                    setIsLicenseValid(false);
+                    setLicenseData(null);
+                }
+                return false;
+            }
+        }
+    };
 
+    const validateCurrentLicense = () => checkLicense();
+
+    useEffect(() => {
         validateCurrentLicense();
 
         // Listen for connectivity changes
@@ -619,45 +623,7 @@ export const StoreProvider = ({ children }) => {
             }
         }
 
-        // Fallback: non-electron environment or no updater available - existing Firestore check
-        try {
-            let currentVersion = '1.0.0';
-            if (window.electron?.getAppVersion) {
-                currentVersion = await window.electron.getAppVersion();
-            }
-
-            // Get latest version from Firestore
-            const versionRef = doc(db, "Control", "Version");
-            const versionSnap = await getDoc(versionRef);
-
-            if (versionSnap.exists()) {
-                const remoteData = versionSnap.data();
-                const latestVersion = remoteData.LatestVersion;
-
-                if (latestVersion && latestVersion !== currentVersion) {
-                    // Get download URL from Firebase Storage using static filename
-                    try {
-                        const fileRef = ref(storage, `Setup/GunterSetup.exe`);
-                        const downloadURL = await getDownloadURL(fileRef);
-                        console.log("Got download URL from Storage:", downloadURL);
-
-                        addNotification(translations[data.settings.language].updateAvailable.replace('%v', latestVersion), 'info');
-                        return { updateFound: true, version: latestVersion, url: downloadURL };
-                    } catch (storageErr) {
-                        console.error("Update file not found in Firebase Storage:", storageErr);
-                        if (manual) addNotification("Update file not available", "warning");
-                        return { error: true, message: "Update file not found" };
-                    }
-                } else if (manual) {
-                    addNotification(translations[data.settings.language].upToDate.replace('%v', currentVersion), 'success');
-                }
-            }
-            return { updateFound: false, version: currentVersion };
-        } catch (error) {
-            console.error("Update check failed:", error);
-            if (manual) addNotification("فشل التحقق من التحديثات", "danger");
-            return { error: true };
-        }
+        return { updateFound: false };
     };
 
     const importData = (encodedStr) => {
@@ -812,6 +778,8 @@ export const StoreProvider = ({ children }) => {
         finishSession: () => setData(prev => ({ ...prev, activeSessionDate: null })),
         activeSessionDate: data.activeSessionDate,
         licenseData,
+        checkLicenseConnection: validateCurrentLicense,
+        checkLicense,
         // Short hands for convenience
         operations: data.operations,
         transactions: data.transactions || [],

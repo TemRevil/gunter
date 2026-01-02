@@ -56,6 +56,7 @@ export const translations = {
         activationDate: 'تاريخ التفعيل',
         activationTime: 'وقت التفعيل',
         licensedTo: 'المرخص له',
+        checkConnection: 'تحقق من الاتصال',
 
         // Operations
         newOperation: 'عملية بيع جديدة',
@@ -295,6 +296,7 @@ export const translations = {
         activationDate: 'Activation Date',
         activationTime: 'Activation Time',
         licensedTo: 'Licensed To',
+        checkConnection: 'Check Connection',
 
         // Operations
         newOperation: 'New Sale',

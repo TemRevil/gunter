@@ -7,138 +7,168 @@ import {
 import { StoreContext } from '../store/StoreContext';
 import { printReceipt } from '../utils/printing';
 
-const LicenseSection = ({ settings, setData, t, licenseData }) => (
-    <section className="settings-section-card" style={{ padding: '1.5rem', width: '100%', maxWidth: '600px', margin: '0 auto' }}>
-        <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
-            <div className="settings-section-icon security" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success-color)', width: '40px', height: '40px' }}>
-                <ShieldCheck size={20} />
-            </div>
-            <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('activation')}</h3>
-            </div>
-        </header>
+const LicenseSection = ({ settings, setData, t, licenseData, checkLicenseConnection }) => {
+    const [checking, setChecking] = useState(false);
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div className="settings-item-row" style={{ cursor: 'default', padding: '0.75rem' }}>
-                <div>
-                    <span className="settings-item-label">{t('activationStatus')}</span>
-                    <span className="settings-item-subtext" style={{ color: 'var(--success-color)', fontWeight: 700 }}>{t('activated')}</span>
-                </div>
-                <div style={{ color: 'var(--success-color)' }}>
+    const handleCheck = async () => {
+        setChecking(true);
+        try {
+            const isValid = await checkLicenseConnection();
+            if (isValid) {
+                window.showToast?.(t('activated'), 'success');
+            } else {
+                window.showToast?.(t('licenseWarning'), 'danger');
+            }
+        } catch (error) {
+            window.showToast?.(t('licenseWarning'), 'danger');
+        } finally {
+            setChecking(false);
+        }
+    };
+
+    return (
+        <section className="settings-section-card" style={{ padding: '1.5rem', width: '100%', maxWidth: '600px', margin: '0 auto' }}>
+            <header className="settings-section-header" style={{ marginBottom: '1.5rem', paddingBottom: '1rem' }}>
+                <div className="settings-section-icon security" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success-color)', width: '40px', height: '40px' }}>
                     <ShieldCheck size={20} />
                 </div>
-            </div>
+                <div>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('activation')}</h3>
+                </div>
+            </header>
 
-            {licenseData && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: 'rgba(59, 130, 246, 0.05)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px dashed rgba(59, 130, 246, 0.2)' }}>
-                    <div style={{ borderBottom: '1px solid rgba(59, 130, 246, 0.1)', paddingBottom: '0.75rem', marginBottom: '0.25rem' }}>
-                        <span style={{ fontSize: '0.75rem', opacity: 0.6, display: 'block', marginBottom: '0.2rem' }}>{t('licensedTo')}</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontWeight: 800, fontSize: '1.05rem', color: 'var(--accent-color)' }}>
-                            <UserCheck size={18} />
-                            {licenseData.LicensedTo || '---'}
-                        </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="settings-item-row" style={{ cursor: 'default', padding: '0.75rem' }}>
+                    <div>
+                        <span className="settings-item-label">{t('activationStatus')}</span>
+                        <span className="settings-item-subtext" style={{ color: 'var(--success-color)', fontWeight: 700 }}>{t('activated')}</span>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                        <div>
-                            <span style={{ fontSize: '0.75rem', opacity: 0.6, display: 'block', marginBottom: '0.2rem' }}>{t('activationDate')}</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, fontSize: '0.9rem' }}>
-                                <FileBarChart size={14} opacity={0.6} />
-                                {licenseData.Date || '---'}
-                            </div>
-                        </div>
-                        <div>
-                            <span style={{ fontSize: '0.75rem', opacity: 0.6, display: 'block', marginBottom: '0.2rem' }}>{t('activationTime')}</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, fontSize: '0.9rem' }}>
-                                <Palette size={14} opacity={0.6} />
-                                {licenseData.Time || '---'}
-                            </div>
-                        </div>
+                    <div style={{ color: 'var(--success-color)' }}>
+                        <ShieldCheck size={20} />
                     </div>
                 </div>
-            )}
 
-            <div className="password-box" style={{ padding: '1rem' }}>
-                <div className="password-box-header" style={{ marginBottom: '0.5rem' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{t('activationKey')}</span>
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input
-                        type="text"
-                        readOnly
-                        value={(() => {
-                            if (!settings.license) return 'XXXX-XXXX-XXXX-XXXX';
-                            const key = settings.license;
-                            let masked = '';
-                            let seen = 0;
-                            for (let i = key.length - 1; i >= 0; i--) {
-                                if (key[i] === '-') {
-                                    masked = '-' + masked;
-                                } else if (seen < 4) {
-                                    masked = key[i] + masked;
-                                    seen++;
-                                } else {
-                                    masked = '*' + masked;
+                {licenseData && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: 'rgba(59, 130, 246, 0.05)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px dashed rgba(59, 130, 246, 0.2)' }}>
+                        <div style={{ borderBottom: '1px solid rgba(59, 130, 246, 0.1)', paddingBottom: '0.75rem', marginBottom: '0.25rem' }}>
+                            <span style={{ fontSize: '0.75rem', opacity: 0.6, display: 'block', marginBottom: '0.2rem' }}>{t('licensedTo')}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontWeight: 800, fontSize: '1.05rem', color: 'var(--accent-color)' }}>
+                                <UserCheck size={18} />
+                                {licenseData.LicensedTo || '---'}
+                            </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div>
+                                <span style={{ fontSize: '0.75rem', opacity: 0.6, display: 'block', marginBottom: '0.2rem' }}>{t('activationDate')}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, fontSize: '0.9rem' }}>
+                                    <FileBarChart size={14} opacity={0.6} />
+                                    {licenseData.Date || '---'}
+                                </div>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '0.75rem', opacity: 0.6, display: 'block', marginBottom: '0.2rem' }}>{t('activationTime')}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, fontSize: '0.9rem' }}>
+                                    <Palette size={14} opacity={0.6} />
+                                    {licenseData.Time || '---'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div className="password-box" style={{ padding: '1rem' }}>
+                    <div className="password-box-header" style={{ marginBottom: '0.5rem' }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{t('activationKey')}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <input
+                            type="text"
+                            readOnly
+                            value={(() => {
+                                if (!settings.license) return 'XXXX-XXXX-XXXX-XXXX';
+                                const key = settings.license;
+                                let masked = '';
+                                let seen = 0;
+                                for (let i = key.length - 1; i >= 0; i--) {
+                                    if (key[i] === '-') {
+                                        masked = '-' + masked;
+                                    } else if (seen < 4) {
+                                        masked = key[i] + masked;
+                                        seen++;
+                                    } else {
+                                        masked = '*' + masked;
+                                    }
                                 }
-                            }
-                            return masked;
-                        })()}
-                        style={{
-                            flex: 1,
-                            background: 'var(--bg-body)',
-                            textAlign: 'center',
-                            fontFamily: 'monospace',
-                            letterSpacing: '2px',
-                            fontWeight: 700,
-                            borderRadius: 'var(--radius-md)',
-                            padding: '0.6rem'
-                        }}
-                    />
-                    <button
-                        className="btn btn-primary"
-                        style={{ borderRadius: 'var(--radius-md)', padding: '0.6rem 1rem' }}
-                        onClick={() => {
-                            window.customConfirm?.(t('change'), t('changeKeyConfirm'), () => {
-                                setData(prev => ({
-                                    ...prev,
-                                    settings: { ...prev.settings, license: null }
-                                }));
-                                window.location.reload();
-                            });
-                        }}
-                    >
-                        {t('change')}
-                    </button>
+                                return masked;
+                            })()}
+                            style={{
+                                flex: 1,
+                                background: 'var(--bg-body)',
+                                textAlign: 'center',
+                                fontFamily: 'monospace',
+                                letterSpacing: '2px',
+                                fontWeight: 700,
+                                borderRadius: 'var(--radius-md)',
+                                padding: '0.6rem'
+                            }}
+                        />
+                        <button
+                            className={`btn ${checking ? 'btn-secondary' : 'btn-primary'}`}
+                            style={{ borderRadius: 'var(--radius-md)', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                            onClick={handleCheck}
+                            disabled={checking}
+                        >
+                            <RotateCcw size={16} className={checking ? 'spin' : ''} />
+                            {t('checkConnection')}
+                        </button>
+                        <button
+                            className="btn btn-secondary"
+                            style={{ borderRadius: 'var(--radius-md)', padding: '0.6rem 1rem' }}
+                            onClick={() => {
+                                window.customConfirm?.(t('change'), t('changeKeyConfirm'), () => {
+                                    setData(prev => ({
+                                        ...prev,
+                                        settings: { ...prev.settings, license: null }
+                                    }));
+                                    window.location.reload();
+                                });
+                            }}
+                        >
+                            {t('change')}
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
-                <a
-                    href={`https://wa.me/201001308280?text=${encodeURIComponent(t('whatsappMessage'))}`}
-                    onClick={(e) => {
-                        const url = `https://wa.me/201001308280?text=${encodeURIComponent(t('whatsappMessage'))}`;
-                        if (window.electron?.openExternal) {
-                            e.preventDefault();
-                            window.electron.openExternal(url);
-                        }
-                    }}
-                    className="btn btn-secondary"
-                    style={{ borderRadius: 'var(--radius-md)', padding: '0.6rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
-                    target="_blank" rel="noreferrer noopener"
-                >
-                    <Phone size={16} />
-                    <span>{t('callUs')}</span>
-                </a>
-            </div>
+                <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                    <a
+                        href={`https://wa.me/201001308280?text=${encodeURIComponent(t('whatsappMessage'))}`}
+                        onClick={(e) => {
+                            const url = `https://wa.me/201001308280?text=${encodeURIComponent(t('whatsappMessage'))}`;
+                            if (window.electron?.openExternal) {
+                                e.preventDefault();
+                                window.electron.openExternal(url);
+                            }
+                        }}
+                        className="btn btn-secondary"
+                        style={{ borderRadius: 'var(--radius-md)', padding: '0.6rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                        target="_blank" rel="noreferrer noopener"
+                    >
+                        <Phone size={16} />
+                        <span>{t('callUs')}</span>
+                    </a>
+                </div>
 
-        </div>
-    </section>
-);
+            </div>
+        </section>
+    );
+};
 
 const Settings = () => {
     const {
         settings, toggleTheme, updateReceiptSettings,
         exportData, importData, setData, data, t, licenseData,
-        checkAppUpdates, updateState, downloadUpdate, installUpdate, clearUpdateState
+        checkAppUpdates, updateState, downloadUpdate, installUpdate, clearUpdateState,
+        checkLicenseConnection
     } = useContext(StoreContext);
 
     const [activeTab, setActiveTab] = useState('general');
@@ -628,7 +658,7 @@ const Settings = () => {
                     </section>
                 );
             case 'license':
-                return <LicenseSection settings={settings} setData={setData} t={t} licenseData={licenseData} />;
+                return <LicenseSection settings={settings} setData={setData} t={t} licenseData={licenseData} checkLicenseConnection={checkLicenseConnection} />;
             default:
                 return null;
         }

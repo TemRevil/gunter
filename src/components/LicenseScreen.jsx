@@ -1,15 +1,34 @@
 import React, { useState } from 'react';
-import { Key, Globe } from 'lucide-react';
-
-// Keep icon simple for the WhatsApp button (reuse Key icon)
+import { Key, Globe, RotateCcw } from 'lucide-react';
 import { useStore } from '../store/StoreContext';
 
 const LicenseScreen = ({ onActivate }) => {
-    const { t, settings, setData } = useStore();
+    const { t, settings, setData, checkLicense } = useStore();
     const [code, setCode] = useState('');
     const [name, setName] = useState('');
 
     const [loading, setLoading] = useState(false);
+    const [checking, setChecking] = useState(false);
+
+    const handleCheck = async () => {
+        if (!code) {
+            window.showToast?.(t('licenseWarning'), 'warning');
+            return;
+        }
+        setChecking(true);
+        try {
+            const isValid = await checkLicense(code);
+            if (isValid) {
+                window.showToast?.(t('activated'), 'success');
+            } else {
+                window.showToast?.(t('licenseWarning'), 'danger');
+            }
+        } catch (error) {
+            window.showToast?.(t('licenseWarning'), 'danger');
+        } finally {
+            setChecking(false);
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -71,8 +90,19 @@ const LicenseScreen = ({ onActivate }) => {
                         style={{ maxWidth: '100%', width: '100%', marginBottom: '1rem' }}
                         disabled={loading}
                     />
-                    <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '1rem' }} disabled={loading}>
+                    <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '1rem', marginTop: '1rem' }} disabled={loading || checking}>
                         {loading ? (settings.language === 'ar' ? 'جاري التحقق...' : 'Verifying...') : (<><Key size={18} /> {t('activateNow')}</>)}
+                    </button>
+
+                    <button
+                        type="button"
+                        className={`btn ${checking ? 'btn-secondary' : 'btn-ghost'}`}
+                        style={{ width: '100%', padding: '0.75rem', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.9rem' }}
+                        onClick={handleCheck}
+                        disabled={loading || checking}
+                    >
+                        <RotateCcw size={16} className={checking ? 'spin' : ''} />
+                        {t('checkConnection')}
                     </button>
 
                     <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
