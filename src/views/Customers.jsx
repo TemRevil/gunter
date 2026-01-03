@@ -8,7 +8,8 @@ import { StoreContext } from '../store/StoreContext';
 import Modal from '../components/Modal';
 import DropdownMenu from '../components/DropdownMenu';
 import CustomerForm from '../components/CustomerForm';
-import { printCustomerDebts } from '../utils/printing';
+import ReceiptModal from '../components/ReceiptModal';
+import { printCustomerDebts, printReceipt, generateReceiptHtml } from '../utils/printing';
 
 const Customers = () => {
     const {
@@ -25,6 +26,10 @@ const Customers = () => {
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [customerForm, setCustomerForm] = useState({ id: '', name: '', phone: '', address: '' });
     const [directTx, setDirectTx] = useState({ amount: '', type: 'payment', note: '' });
+
+    // Receipt Modal State
+    const [showReceiptModal, setShowReceiptModal] = useState(false);
+    const [selectedOpForReceipt, setSelectedOpForReceipt] = useState(null);
 
     const filteredCustomers = customers.filter(customer =>
         customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -301,7 +306,33 @@ const Customers = () => {
                                         {new Date(item.timestamp).toLocaleDateString(settings.language === 'ar' ? 'ar-EG' : 'en-US')}
                                     </td>
                                     <td className="font-medium" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        {item.label}
+                                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                                            {item.label.split(/(#\d+)/g).map((part, i) => {
+                                                if (part.match(/^#\d+$/)) {
+                                                    const opId = part.substring(1);
+                                                    return (
+                                                        <span
+                                                            key={i}
+                                                            className="text-accent cursor-pointer hover:underline"
+                                                            style={{ fontWeight: 700, margin: '0 4px', textDecoration: 'underline' }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                const op = operations.find(o => o.id === opId);
+                                                                if (op) {
+                                                                    setSelectedOpForReceipt(op);
+                                                                    setShowReceiptModal(true);
+                                                                } else {
+                                                                    window.showToast?.(t('noOperations') || 'Operation not found', 'warning');
+                                                                }
+                                                            }}
+                                                        >
+                                                            {part}
+                                                        </span>
+                                                    );
+                                                }
+                                                return <span key={i}>{part}</span>;
+                                            })}
+                                        </div>
                                         {item.source === 'transaction' && (
                                             <button className="btn-icon text-danger" style={{ padding: '4px' }} onClick={() => {
                                                 const performDelete = () => {
@@ -344,6 +375,13 @@ const Customers = () => {
                     </form>
                 </div>
             </Modal>
+
+            {/* View Receipt Modal */}
+            <ReceiptModal
+                show={showReceiptModal}
+                onClose={() => setShowReceiptModal(false)}
+                operation={selectedOpForReceipt}
+            />
         </div>
     );
 };

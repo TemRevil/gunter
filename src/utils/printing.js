@@ -20,13 +20,26 @@ export const generateReceiptHtml = (op, settings) => {
     const dateStr = today.toLocaleDateString(isAr ? 'ar-EG' : 'en-US');
     const timeStr = today.toLocaleTimeString(isAr ? 'ar-EG' : 'en-US');
 
-    const opTotal = parseFloat(op.price || 0);
+    // Calculations
+    const items = op.items || [{ partName: op.partName, quantity: op.quantity, price: op.price }];
+
+    // Calculate Subtotal (Sum of Item Totals)
+    const subtotal = items.reduce((acc, item) => {
+        const q = parseFloat(item.quantity || 1);
+        const p = parseFloat(item.price || 0); // Unit Price
+        return acc + (q * p);
+    }, 0);
+
+    const opTotal = parseFloat(op.price || 0); // Final Total (Post-Discount)
+    const discountAmount = subtotal - opTotal;
+    const hasDiscount = discountAmount > 0.01; // Tolerance for float errors
+
     const opPaid = parseFloat(op.paidAmount || 0);
     const debt = opTotal - opPaid;
 
-    const balanceText = debt > 0
+    const balanceText = debt > 0.01
         ? `${t('onHim')}: ${debt.toLocaleString()}`
-        : (debt < 0 ? `${t('forHim')}: ${Math.abs(debt).toLocaleString()}` : `${t('remaining')}: 0`);
+        : (debt < -0.01 ? `${t('forHim')}: ${Math.abs(debt).toLocaleString()}` : `${t('remaining')}: 0`);
 
     const paymentStatusText = op.paymentStatus === 'paid'
         ? t('fullyPaid')
@@ -41,15 +54,15 @@ export const generateReceiptHtml = (op, settings) => {
         status: t('paymentStatus'),
         itemDescription: isAr ? 'الصنف / الخدمة' : 'Item / Service',
         qty: t('qty'),
+        unitPrice: isAr ? 'سعر الوحدة' : 'Unit Price',
         total: t('total'),
         subtotal: isAr ? 'الإجمالي الفرعي' : 'Subtotal',
+        discount: isAr ? 'خصم' : 'Discount',
         paid: isAr ? 'المدفوع' : 'Cash Paid',
         grandTotal: isAr ? 'الإجمالي النهائي' : 'GRAND TOTAL',
         balance: t('currentBalance') || (isAr ? 'رصيد الحساب' : 'Account Balance'),
         thankYou: isAr ? 'شكراً لثقتكم بنا!' : 'Thank you for choosing us!'
     };
-
-    const items = op.items || [{ partName: op.partName, quantity: op.quantity, price: op.price }];
 
     const extraInputsHtml = (op.extraInputs || [])
         .filter(inp => inp.value?.trim())
@@ -64,10 +77,12 @@ export const generateReceiptHtml = (op, settings) => {
                 background: white; 
                 padding: 15px; 
                 width: 80mm; 
+                min-height: 120mm;
                 margin: 0 auto; 
                 color: #000;
                 direction: ${isAr ? 'rtl' : 'ltr'};
                 font-family: ${isAr ? "'Cairo', sans-serif" : "'Inter', sans-serif"};
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0,0,0,0.05); /* Paper Shadow */
             }
             .receipt-content-wrapper * { margin: 0; padding: 0; box-sizing: border-box; }
             
@@ -115,8 +130,6 @@ export const generateReceiptHtml = (op, settings) => {
                 vertical-align: middle;
             }
             
-            .unit-price { font-size: 0.65rem; color: #666; display: block; margin-top: 2px; }
-
             .totals-section { margin-top: 15px; }
             .total-row { 
                 display: flex; 
@@ -152,7 +165,7 @@ export const generateReceiptHtml = (op, settings) => {
             .social-divider { text-align: center; color: #ccc; margin: 12px 0; font-size: 0.8rem; }
             
             @media print {
-                .receipt-content-wrapper { padding: 0; width: 100%; }
+                .receipt-content-wrapper { padding: 0; width: 100%; box-shadow: none; min-height: 0; margin: 0; }
             }
         </style>
 
@@ -182,23 +195,25 @@ export const generateReceiptHtml = (op, settings) => {
             <table class="receipt-table">
                 <thead>
                     <tr>
-                        <th style="width: 55%;">${labels.itemDescription}</th>
+                        <th style="width: 40%;">${labels.itemDescription}</th>
                         <th style="text-align: center; width: 15%;">${labels.qty}</th>
-                        <th style="text-align: ${isAr ? 'left' : 'right'}; width: 30%;">${labels.total}</th>
+                        <th style="width: 20%; text-align: ${isAr ? 'left' : 'right'};">${labels.unitPrice}</th>
+                        <th style="text-align: ${isAr ? 'left' : 'right'}; width: 25%;">${labels.total}</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${items.map(item => {
         const itemQty = parseFloat(item.quantity || 1);
-        const itemPrice = parseFloat(item.price || 0);
+        const itemPrice = parseFloat(item.price || 0); // Unit Price
+        const itemTotal = itemQty * itemPrice;
         return `
                             <tr>
                                 <td>
                                     <span style="font-weight: 600;">${item.partName || ''}</span>
-                                    <span class="unit-price">${isAr ? 'سعر الوحدة' : 'Unit'}: ${(itemPrice / itemQty).toLocaleString()}</span>
                                 </td>
                                 <td style="text-align: center; font-weight: 700;">${itemQty}</td>
-                                <td style="text-align: ${isAr ? 'left' : 'right'}; font-weight: 700;">${itemPrice.toLocaleString()}</td>
+                                <td style="text-align: ${isAr ? 'left' : 'right'}; font-size: 0.85em;">${itemPrice.toLocaleString()}</td>
+                                <td style="text-align: ${isAr ? 'left' : 'right'}; font-weight: 700;">${itemTotal.toLocaleString()}</td>
                             </tr>
                         `;
     }).join('')}
@@ -206,10 +221,24 @@ export const generateReceiptHtml = (op, settings) => {
             </table>
 
             <div class="totals-section">
-                <div class="total-row">
-                    <span style="color:#666;">${labels.subtotal}</span>
-                    <span>${opTotal.toLocaleString()}</span>
-                </div>
+                ${hasDiscount ? `
+                    <div class="total-row">
+                        <span style="color:#666;">${labels.subtotal}</span>
+                        <span>${subtotal.toLocaleString()}</span>
+                    </div>
+                     <div class="total-row" style="color: var(--danger-color, #dc2626);">
+                        <span>${labels.discount}</span>
+                        <span>- ${discountAmount.toLocaleString()}</span>
+                    </div>
+                ` : ''}
+                
+                ${!hasDiscount ? `
+                    <div class="total-row">
+                        <span style="color:#666;">${labels.subtotal}</span>
+                        <span>${opTotal.toLocaleString()}</span>
+                    </div>
+                ` : ''}
+
                 <div class="total-row">
                     <span style="color:#666;">${labels.paid}</span>
                     <span>${opPaid.toLocaleString()}</span>
@@ -229,7 +258,6 @@ export const generateReceiptHtml = (op, settings) => {
 
             <div class="footer-note">
                 <p style="font-weight:700; margin-bottom:5px;">${receipt.footer}</p>
-                <p>${labels.thankYou}</p>
                 <div style="margin-top:15px; height:25px; background:repeating-linear-gradient(90deg, #000, #000 2px, #fff 2px, #fff 4px); opacity:0.1;"></div>
             </div>
         </div>
@@ -372,18 +400,19 @@ export const printCustomerDebts = (customer, operations, settings) => {
         win.close();
     }, 500);
 };
-export const printEndSessionReport = (expected, actual, diff, settings) => {
+
+export const printEndSessionReport = (expected, actual, diff, settings, operations = []) => {
     const isAr = settings?.language === 'ar';
     const lang = settings?.language || 'ar';
-    const t = (key) => translations[lang]?.[key] || key;
+    const t = (key) => translations[lang]?.[key] || null;
 
     const html = `
         <html>
         <head>
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap');
-                body { font-family: 'Cairo', sans-serif; direction: ${isAr ? 'rtl' : 'ltr'}; padding: 50px; color: #333; line-height: 1.6; }
-                .report-card { max-width: 600px; margin: 0 auto; border: 2px solid #eee; padding: 40px; border-radius: 12px; }
+                body { font-family: 'Cairo', sans-serif; direction: ${isAr ? 'rtl' : 'ltr'}; padding: 40px; color: #333; line-height: 1.6; }
+                .report-card { max-width: 800px; margin: 0 auto; border: 2px solid #eee; padding: 40px; border-radius: 12px; }
                 .header { text-align: center; margin-bottom: 40px; }
                 .header h1 { margin: 0; font-size: 28px; color: #000; font-weight: 800; }
                 .header p { color: #666; margin-top: 5px; }
@@ -400,23 +429,29 @@ export const printEndSessionReport = (expected, actual, diff, settings) => {
                     color: ${diff === 0 ? '#166534' : (diff < 0 ? '#991b1b' : '#166534')};
                     border: 2px solid ${diff === 0 ? '#166534' : (diff < 0 ? '#991b1b' : '#166534')};
                 }
+                
+                table { width: 100%; border-collapse: collapse; margin-top: 40px; }
+                th { background: #f8f9fa; padding: 12px; text-align: ${isAr ? 'right' : 'left'}; border-bottom: 2px solid #000; font-size: 14px; font-weight: 800; }
+                td { padding: 10px; border-bottom: 1px solid #eee; font-size: 14px; }
+                .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #eee; }
+                
                 .footer { margin-top: 50px; text-align: center; font-size: 14px; color: #999; border-top: 1px solid #eee; padding-top: 20px; }
-                @media print { body { padding: 20px; } }
+                @media print { body { padding: 20px; } .report-card { border: none; padding: 0; } }
             </style>
         </head>
         <body>
             <div class="report-card">
                 <div class="header">
-                    <h1>${t('endSessionReport') || (isAr ? 'تقرير نهاية الوردية' : 'End Session Report')}</h1>
+                    <h1>${t('endSessionReport') || 'End Session Report'}</h1>
                     <p>${new Date().toLocaleDateString(isAr ? 'ar-EG' : 'en-US')} | ${new Date().toLocaleTimeString(isAr ? 'ar-EG' : 'en-US')}</p>
                 </div>
 
                 <div class="summary-item">
-                    <span>${t('expectedCash') || (isAr ? 'النقد المتوقع' : 'Expected Cash')}</span>
+                    <span>${t('expectedCash') || 'Expected Cash'}</span>
                     <b>${expected.toLocaleString()}</b>
                 </div>
                 <div class="summary-item">
-                    <span>${t('actualCashInSafe') || (isAr ? 'النقد الفعلي' : 'Actual Cash')}</span>
+                    <span>${t('actualCashInSafe') || 'Actual Cash In Safe'}</span>
                     <b>${actual.toLocaleString()}</b>
                 </div>
 
@@ -426,6 +461,32 @@ export const printEndSessionReport = (expected, actual, diff, settings) => {
                         ${diff < 0 ? (isAr ? '(عجز)' : '(Shortage)') : (diff > 0 ? (isAr ? '(زيادة)' : '(Surplus)') : '')}
                     </div>
                 </div>
+                
+                ${operations.length > 0 ? `
+                    <h3 style="margin-top: 40px; margin-bottom: 10px; font-size: 18px;">${isAr ? 'سجل العمليات' : 'Operations Log'} (${operations.length})</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th width="15%">${isAr ? 'الوقت' : 'Time'}</th>
+                                <th width="25%">${isAr ? 'العميل' : 'Customer'}</th>
+                                <th width="30%">${isAr ? 'البيان' : 'Details'}</th>
+                                <th width="15%">${isAr ? 'الإجمالي' : 'Total'}</th>
+                                <th width="15%">${isAr ? 'المدفوع' : 'Paid'}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${operations.map(op => `
+                                <tr>
+                                    <td>${new Date(op.timestamp).toLocaleTimeString(isAr ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</td>
+                                    <td>${op.customerName}</td>
+                                    <td>${op.items ? op.items.map(i => i.partName).join(', ') : op.partName}</td>
+                                    <td style="font-weight: 700">${parseFloat(op.price).toLocaleString()}</td>
+                                    <td>${parseFloat(op.paidAmount).toLocaleString()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : ''}
 
                 <div class="footer">
                     <p>Gunter POS System - ${isAr ? 'نظام جنتر للمبيعات' : 'Sales Management'}</p>

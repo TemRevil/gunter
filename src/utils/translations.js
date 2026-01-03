@@ -264,6 +264,12 @@ export const translations = {
         viewReceipt: 'عرض الفاتورة',
         previewAndPrint: 'معاينة وطباعة الفاتورة',
         unitPrice: 'سعر الوحدة',
+        endSessionReport: 'تقرير نهاية الوردية',
+        expectedCash: 'النقد المتوقع',
+        remaining: 'المتبقي',
+        creditUsed: 'تم خصم من الرصيد',
+        creditUsedForOp: 'تم استخدام الرصيد للشراء',
+        noItemsFound: 'لا توجد أصناف',
     },
     en: {
         appName: 'Gunter',
@@ -530,5 +536,11 @@ export const translations = {
         viewReceipt: 'View Receipt',
         previewAndPrint: 'Preview and print the invoice',
         unitPrice: 'Unit Price',
+        endSessionReport: 'End Session Report',
+        expectedCash: 'Expected Cash',
+        remaining: 'Remaining',
+        creditUsed: 'Credit Used',
+        creditUsedForOp: 'Credit used for Purchase',
+        noItemsFound: 'No Items Found',
     }
 };

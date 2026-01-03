@@ -279,16 +279,15 @@ export const StoreProvider = ({ children }) => {
             const activeDate = data.activeSessionDate;
             const autoStart = data.settings?.autoStartNewDay;
 
-            if (autoStart && activeDate && activeDate !== today) {
-                setData(prev => ({
-                    ...prev,
-                    activeSessionDate: today
-                }));
-                // Optional: add a notification
-                setTimeout(() => addNotification(
-                    data.settings.language === 'ar' ? `بدأ يوم عمل جديد تلقائياً: ${today}` : `New business day started automatically: ${today}`,
-                    'success'
-                ), 100);
+            if (activeDate && activeDate !== today) {
+                // If autoStartNewDay is FALSE (unchecked), we silently move the calendar (update date)
+                // If it is TRUE (checked), we do NOTHING here, so App.jsx detects the mismatch and opens the End Session modal.
+                if (!autoStart) {
+                    setData(prev => ({
+                        ...prev,
+                        activeSessionDate: today
+                    }));
+                }
             }
         };
 

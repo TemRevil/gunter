@@ -2,12 +2,14 @@ import React, { useState, useContext, useEffect, useRef } from 'react';
 import {
     CalendarCheck, Search, Plus, Trash2,
     Printer, Clock, User, Package, DollarSign,
-    CheckCircle2, AlertCircle, Edit2, X
+    CheckCircle2, AlertCircle, Edit2, X,
+    History, Coins, UserCheck
 } from 'lucide-react';
 import { StoreContext } from '../store/StoreContext';
 import Modal from '../components/Modal';
 import DropdownMenu from '../components/DropdownMenu';
-import { printReceipt, generateReceiptHtml } from '../utils/printing';
+import ReceiptModal from '../components/ReceiptModal';
+import { printReceipt, generateReceiptHtml, printCustomerDebts } from '../utils/printing';
 import CustomerForm from '../components/CustomerForm';
 import PartForm from '../components/PartForm';
 import CustomDatePicker from '../components/CustomDatePicker';
@@ -142,9 +144,10 @@ const CustomAutocomplete = ({ label, items, value, onSelect, onAddNew, placehold
 
 const Operations = () => {
     const {
-        operations, parts, customers,
+        operations, parts, customers, transactions,
         addOperation, updateOperation, deleteOperation, settings,
-        addCustomer, addPart, t
+        addCustomer, addPart, t,
+        recordDirectTransaction, deleteTransaction
     } = useContext(StoreContext);
 
     const getLocalDateString = () => {
@@ -235,6 +238,12 @@ const Operations = () => {
     const [quickName, setQuickName] = useState('');
     const [targetItemIndex, setTargetItemIndex] = useState(-1);
 
+    // Discount & History States
+    const [showHistoryModal, setShowHistoryModal] = useState(false);
+    const [discount, setDiscount] = useState('');
+    const [discountType, setDiscountType] = useState('fixed'); // 'fixed' | 'percent'
+    const [directTx, setDirectTx] = useState({ amount: '', type: 'payment', note: '' }); // For history modal
+
     const initialFormData = {
         customerId: '',
         customerName: '',
@@ -246,6 +255,95 @@ const Operations = () => {
     };
 
     const [formData, setFormData] = useState(initialFormData);
+
+    // Derived Customer Data for UI
+    const selectedCustomer = formData.customerId ? customers.find(c => c.id === formData.customerId) : null;
+
+    // Auto-calculate total when items or discount changes
+    useEffect(() => {
+        const subtotal = formData.items.reduce((acc, item) => acc + ((parseInt(item.quantity) || 0) * (parseFloat(item.price) || 0)), 0);
+        let discountVal = 0;
+
+        if (discount) {
+            const d = parseFloat(discount);
+            if (!isNaN(d)) {
+                if (discountType === 'percent') {
+                    // Cap at 100%
+                    const safeD = Math.min(d, 100);
+                    discountVal = (subtotal * safeD) / 100;
+                } else {
+                    // Cap at subtotal
+                    discountVal = Math.min(d, subtotal);
+                }
+            }
+        }
+
+        // Final Safety Check: Discount cannot exceed subtotal
+        if (discountVal > subtotal) discountVal = subtotal;
+
+        let finalTotal = Math.max(0, subtotal - discountVal);
+        let creditDeduction = 0;
+
+        // Auto-apply credit if customer has negative balance (owed money)
+        // Only applies for new operations, not edits (to avoid confusion or double application)
+        if (selectedCustomer && selectedCustomer.balance < 0 && !isEditMode) {
+            const availableCredit = Math.abs(selectedCustomer.balance);
+            creditDeduction = Math.min(availableCredit, finalTotal);
+        }
+
+        finalTotal = Math.max(0, finalTotal - creditDeduction);
+
+        setFormData(prev => ({
+            ...prev,
+            price: String(finalTotal),
+            creditUsed: creditDeduction, // Track calculated credit usage
+            // Only auto-update paid amount if it matches the total (assuming full payment intent)
+            paidAmount: prev.paymentStatus === 'paid' ? String(finalTotal) : prev.paidAmount
+        }));
+    }, [formData.items, discount, discountType, formData.paymentStatus, selectedCustomer, isEditMode]);
+
+
+
+    // History Data construction
+    const combinedHistory = selectedCustomer && showHistoryModal ? [
+        ...operations.filter(op => op.customerId === selectedCustomer.id).map((op, idx) => ({
+            id: op.id,
+            key: `op-${op.id || idx}`,
+            timestamp: op.timestamp,
+            label: op.items ? op.items.map(i => `${i.partName} (${i.quantity})`).join(', ') : `${op.partName} x ${op.quantity}`,
+            amount: op.price,
+            paid: op.paidAmount,
+            source: 'operation'
+        })),
+        ...transactions.filter(tx => tx.customerId === selectedCustomer.id).map((tx, idx) => ({
+            id: tx.id,
+            key: `tx-${tx.id || idx}`,
+            timestamp: tx.timestamp,
+            label: tx.note,
+            amount: tx.type === 'debt' ? tx.amount : 0,
+            paid: tx.type === 'payment' ? tx.amount : 0,
+            source: 'transaction'
+        }))
+    ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)) : [];
+
+    const handleDirectTxSubmit = (e) => {
+        e.preventDefault();
+        if (!selectedCustomer || !selectedCustomer.id) return;
+
+        const performAdd = () => {
+            const msg = directTx.type === 'payment' ? t('debtPaymentNote') : t('debtIncreaseNote');
+            recordDirectTransaction(selectedCustomer.id, directTx.amount, directTx.type, directTx.note || msg);
+            window.showToast?.(t('addTransaction'), 'success');
+            setDirectTx({ amount: '', type: 'payment', note: '' });
+        };
+
+        if (settings?.security?.authOnAddTransaction) {
+            window.requestAdminAuth?.(performAdd, settings.language === 'ar' ? 'تأكيد الهوية' : 'Confirm Identity');
+        } else {
+            performAdd();
+        }
+    };
+
 
     const handleQuickCustSubmit = (data) => {
         const newCust = addCustomer(data);
@@ -546,19 +644,79 @@ const Operations = () => {
             window.showToast?.(t('newCustomerCreated'), 'success');
         }
 
-        const total = parseFloat(formData.price) || 0;
+        // Logic for handling implicit credit usage
+        // If customer has negative balance (credit), we use it to pay part of the operation automatically.
+        // This is done by:
+        // 1. Creating a 'Debt/Credit Clearance' transaction for the amount used.
+        // 2. Reducing the operation price/paidAmount effectively (OR handling it as a split payment).
+        // Based on user request "mines it from the total of receipt" and "record in history".
+
+        // formData.price is ALREADY the net total (after credit was deducted in useEffect)
+        // formData.creditUsed contains the amount of credit that was deducted
+        let finalTotal = parseFloat(formData.price) || 0;
+        let creditUsed = formData.creditUsed || 0;
+
+        // Safety: Verify we aren't using phantom credit if customer balance changed or something weird happened
+        // fetching fresh customer state
+        const freshCust = customers.find(c => c.id === finalCustomerId);
+        if (creditUsed > 0 && freshCust) {
+            const available = Math.abs(freshCust.balance < 0 ? freshCust.balance : 0);
+            // If actual available credit is less than what we thought, adjust?
+            // But formData.price is fixed. Ideally we just proceed, or cap it.
+            // Let's cap creditUsed to available, but that implies price increases? 
+            // Simplest is to trust the UI but verify balance is still negative.
+            if (available < 0.01) creditUsed = 0; // No credit actually available
+            else if (creditUsed > available) creditUsed = available;
+        }
+
+        if (creditUsed > 0 && !isEditMode) {
+            // 1. Record the usage of credit with NEW SIMPLE ID reference
+            // Generate a simple 8-digit ID for the operation to be readable
+            const simpleOpId = Math.floor(10000000 + Math.random() * 90000000).toString();
+
+            recordDirectTransaction(
+                finalCustomerId,
+                String(creditUsed),
+                'debt',
+                // Use the simple ID in the note
+                `${t('creditUsedForOp') || 'Credit used for Purchase'} #${simpleOpId}`
+            );
+
+            // Note: finalTotal is already reduced in formData.price. 
+            // We do NOT subtract it again.
+
+            window.showToast?.(`${t('creditUsed') || 'Credit Applied'}: ${creditUsed.toLocaleString()}`, 'info');
+
+            // Assign the simple ID to the operation data
+            var preGeneratedId = simpleOpId;
+        }
+
         const opData = {
             ...formData,
+            id: preGeneratedId || undefined, // Use the pre-generated ID if available
+            customerId: finalCustomerId,
             customerId: finalCustomerId,
             customerName: formData.customerName.trim(),
-            price: total,
-            paidAmount: formData.paymentStatus === 'paid' ? total : (formData.paymentStatus === 'unpaid' ? 0 : parseFloat(formData.paidAmount || 0)),
+            price: finalTotal, // Adjusted price
+            paidAmount: formData.paymentStatus === 'paid' ? finalTotal : (formData.paymentStatus === 'unpaid' ? 0 : parseFloat(formData.paidAmount || 0)),
+            // Store original total in extra inputs or notes if needed to avoid confusion? 
+            // For now, implicit is what was requested.
             items: formData.items.map(item => ({
                 ...item,
                 quantity: parseInt(item.quantity) || 1,
                 price: parseFloat(item.price) || 0
             }))
         };
+
+        // If we used credit, maybe add a note to extraInputs for the receipt?
+        if (creditUsed > 0) {
+            const creditNote = {
+                id: 'credit_note_' + Date.now(),
+                label: t('creditUsed') || 'Credit Used',
+                value: creditUsed.toLocaleString()
+            };
+            opData.extraInputs = [...(opData.extraInputs || []), creditNote];
+        }
 
         if (isEditMode) {
             updateOperation(editingOpId, opData);
@@ -798,8 +956,8 @@ const Operations = () => {
                         setSidebarOpen(false);
                     }
                 }}>
-                    <div ref={invoiceRef} data-panel-size={panelSize} className="invoice-panel">
-                        <form onSubmit={handleSubmit} className="pos-layout">
+                    <div ref={invoiceRef} data-panel-size={panelSize} className="invoice-panel" style={{ overflowY: 'auto' }}>
+                        <form onSubmit={handleSubmit} className="pos-layout" style={{ minHeight: 'min-content' }}>
                             {/* LEFT SIDE: Operations (Items) */}
                             <div className="pos-main">
                                 <div className="pos-header">
@@ -931,6 +1089,22 @@ const Operations = () => {
                                         displaySubtext={(c) => c.phone}
                                     />
 
+                                    {selectedCustomer && (
+                                        <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'var(--bg-input)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('balance') || 'Balance'}</span>
+                                                <span className={`badge ${selectedCustomer.balance > 0 ? 'danger' : (selectedCustomer.balance < 0 ? 'success' : '')}`}>
+                                                    {selectedCustomer.balance > 0
+                                                        ? `${Math.abs(selectedCustomer.balance).toLocaleString()} (${t('onHim')})`
+                                                        : (selectedCustomer.balance < 0 ? `${Math.abs(selectedCustomer.balance).toLocaleString()} (${t('forHim')})` : '0')}
+                                                </span>
+                                            </div>
+                                            <button type="button" className="btn btn-secondary btn-sm" style={{ width: '100%' }} onClick={() => setShowHistoryModal(true)}>
+                                                <History size={14} /> {t('history') || 'History'}
+                                            </button>
+                                        </div>
+                                    )}
+
                                 </div>
 
                                 {/* Payment Details */}
@@ -941,6 +1115,65 @@ const Operations = () => {
                                         <div className="total-row main">
                                             <span>{t('total')}</span>
                                             <span>{parseFloat(formData.price || 0).toLocaleString()} <small>{settings.currency || '$'}</small></span>
+                                        </div>
+
+                                        {formData.creditUsed > 0 && (
+                                            <div style={{
+                                                fontSize: '0.9rem',
+                                                color: 'var(--success-color)',
+                                                fontWeight: 600,
+                                                marginTop: '4px',
+                                                padding: '4px 8px',
+                                                background: 'rgba(16, 185, 129, 0.1)',
+                                                borderRadius: '4px',
+                                                display: 'inline-block'
+                                            }}>
+                                                {t('creditUsed') || 'Credit Used'}: -{parseFloat(formData.creditUsed).toLocaleString()}
+                                            </div>
+                                        )}
+
+                                        {/* Discount Section */}
+                                        <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border-color)' }}>
+                                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                                <span style={{ fontSize: '0.8rem', flex: 1 }}>{t('discount') || 'Discount'}</span>
+                                                <div style={{ display: 'flex', border: '1px solid var(--border-color)', borderRadius: '4px', overflow: 'hidden' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDiscountType('fixed')}
+                                                        style={{
+                                                            padding: '2px 8px',
+                                                            background: discountType === 'fixed' ? '#000' : 'var(--bg-input)',
+                                                            color: discountType === 'fixed' ? '#fff' : 'var(--text-secondary)',
+                                                            border: 'none', cursor: 'pointer', fontSize: '0.75rem',
+                                                            transition: 'all 0.2s',
+                                                            fontWeight: discountType === 'fixed' ? 700 : 400
+                                                        }}
+                                                    >123</button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDiscountType('percent')}
+                                                        style={{
+                                                            padding: '2px 8px',
+                                                            background: discountType === 'percent' ? '#000' : 'var(--bg-input)',
+                                                            color: discountType === 'percent' ? '#fff' : 'var(--text-secondary)',
+                                                            border: 'none', cursor: 'pointer', fontSize: '0.75rem',
+                                                            transition: 'all 0.2s',
+                                                            fontWeight: discountType === 'percent' ? 700 : 400
+                                                        }}
+                                                    >%</button>
+                                                </div>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                className="pos-input"
+                                                placeholder="0"
+                                                value={discount}
+                                                onChange={(e) => {
+                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                    setDiscount(val);
+                                                }}
+                                                style={{ height: '32px', fontSize: '0.9rem' }}
+                                            />
                                         </div>
                                     </div>
 
@@ -1005,105 +1238,104 @@ const Operations = () => {
                 <PartForm initialData={{ name: quickName }} onSubmit={handleQuickPartSubmit} onCancel={() => setShowQuickPart(false)} />
             </Modal>
 
-            {/* Receipt Preview Modal */}
-            {showReceiptModal && selectedOpForReceipt && (
-                <div className={`invoice-overlay ${showReceiptModal ? 'open' : ''}`} onClick={() => setShowReceiptModal(false)}>
-                    <div className="invoice-panel" onClick={e => e.stopPropagation()} style={{
-                        maxWidth: '450px',
-                        width: '95%',
-                        maxHeight: '90vh',
-                        height: 'auto',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        borderRadius: '12px'
-                    }}>
-                        <div className="invoice-header" style={{
-                            flexShrink: 0,
-                            background: 'var(--bg-card)',
-                            borderBottom: '1px solid var(--border-color)',
-                            padding: '1.5rem 2rem',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            borderTopLeftRadius: '12px',
-                            borderTopRightRadius: '12px'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <div style={{
-                                    background: 'linear-gradient(135deg, var(--primary-color), var(--primary-dark))',
-                                    color: '#fff',
-                                    width: '40px',
-                                    height: '40px',
-                                    borderRadius: '10px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 4px 12px rgba(var(--primary-rgb), 0.2)'
-                                }}>
-                                    <Printer size={22} />
-                                </div>
-                                <div>
-                                    <h3 style={{ margin: 0, fontWeight: 800, fontSize: '1.2rem', color: 'var(--text-primary)' }}>{t('viewReceipt')}</h3>
-                                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{t('previewAndPrint') || 'Preview your transaction receipt'}</p>
-                                </div>
+            {/* History Modal */}
+            <Modal
+                key={selectedCustomer?.id || 'no-cust-hist'}
+                show={showHistoryModal}
+                onClose={() => {
+                    setShowHistoryModal(false);
+                    setDirectTx({ amount: '', type: 'payment', note: '' });
+                }}
+                title={`${t('history')}: ${selectedCustomer?.name || ''}`}
+                style={{ maxWidth: '800px' }}
+            >
+                {selectedCustomer && (
+                    <>
+                        <div className="summary-box" style={{ background: 'var(--bg-input)', padding: '1rem', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <span style={{ fontWeight: 600 }}>{t('currentBalance')}:</span>
+                                <span style={{ fontSize: 'var(--fs-h2)', fontWeight: 800, color: selectedCustomer.balance > 0 ? 'var(--danger-color)' : 'var(--success-color)', marginInlineStart: '10px' }}>
+                                    {Math.abs(selectedCustomer.balance || 0).toLocaleString()}
+                                </span>
+                                <span style={{ fontSize: 'var(--fs-sm)', opacity: 0.7, marginInlineStart: '5px' }}>
+                                    ({(selectedCustomer.balance || 0) >= 0 ? t('onHim') : t('forHim')})
+                                </span>
                             </div>
-                            <button className="btn-close" onClick={() => setShowReceiptModal(false)} style={{
-                                background: 'var(--bg-body)',
-                                border: '1px solid var(--border-color)',
-                                color: 'var(--text-primary)',
-                                cursor: 'pointer',
-                                padding: '8px',
-                                borderRadius: '8px',
-                                display: 'flex',
-                                transition: 'all 0.2s'
-                            }}>
-                                <X size={20} />
+                            <button className="btn btn-secondary" onClick={() => printCustomerDebts(selectedCustomer, operations.filter(o => o.customerId === selectedCustomer.id), settings)}>
+                                <Printer size={16} /> {t('printDebts')}
                             </button>
                         </div>
 
-                        <div style={{
-                            flex: 1,
-                            overflowY: 'auto',
-                            padding: '30px',
-                            background: '#f1f5f9',
-                            display: 'flex',
-                            justifyContent: 'center'
-                        }}>
-                            <div
-                                style={{
-                                    background: '#fff',
-                                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                                    borderRadius: '8px',
-                                    padding: '25px',
-                                    width: '100%',
-                                    height: '100%', // Forced 100% as requested
-                                    border: '1px solid #e2e8f0',
-                                    display: 'flex',
-                                    flexDirection: 'column'
-                                }}
-                                dangerouslySetInnerHTML={{ __html: generateReceiptHtml(selectedOpForReceipt, settings) }}
-                            />
+                        <div className="table-container" style={{ maxHeight: '350px', marginBottom: '1.5rem', overflowY: 'auto' }}>
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '22%' }}>{t('date')}</th>
+                                        <th style={{ width: '40%' }}>{t('notes')}</th>
+                                        <th style={{ width: '19%', textAlign: 'center' }}>{t('total')}</th>
+                                        <th style={{ width: '19%', textAlign: 'center' }}>{t('paid')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {combinedHistory.length > 0 ? combinedHistory.map(item => (
+                                        <tr key={item.key}>
+                                            <td style={{ fontSize: 'var(--fs-xs)', opacity: 0.7 }}>
+                                                {new Date(item.timestamp).toLocaleDateString(settings.language === 'ar' ? 'ar-EG' : 'en-US')}
+                                            </td>
+                                            <td className="font-medium" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                {item.label}
+                                                {item.source === 'transaction' && (
+                                                    <button className="btn-icon text-danger" style={{ padding: '4px' }} onClick={() => {
+                                                        const performDelete = () => {
+                                                            window.customConfirm?.(t('delete'), `${t('delete')}?`, () => {
+                                                                deleteTransaction(item.id);
+                                                            });
+                                                        };
+                                                        if (settings?.security?.authOnDeleteTransaction) {
+                                                            window.requestAdminAuth?.(performDelete, t('confirmIdentity'));
+                                                        } else {
+                                                            performDelete();
+                                                            window.showToast?.(t('delete'), 'success');
+                                                        }
+                                                    }}>
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                            <td style={{ color: item.amount > 0 ? 'var(--danger-color)' : 'inherit', textAlign: 'center' }}>{item.amount > 0 ? parseFloat(item.amount).toLocaleString() : '-'}</td>
+                                            <td style={{ color: item.paid > 0 ? 'var(--success-color)' : 'inherit', textAlign: 'center' }} className="font-medium">{item.paid > 0 ? parseFloat(item.paid).toLocaleString() : '-'}</td>
+                                        </tr>
+                                    )) : (
+                                        <tr><td colSpan="4" style={{ textAlign: 'center', padding: '2rem', opacity: 0.5 }}>{t('noOperations')}</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
 
-                        <div style={{
-                            padding: '15px 20px',
-                            borderTop: '1px solid var(--border-color)',
-                            display: 'flex',
-                            gap: '12px',
-                            justifyContent: 'flex-end',
-                            background: 'var(--bg-card)',
-                            flexShrink: 0
-                        }}>
-                            <button className="btn btn-secondary" onClick={() => setShowReceiptModal(false)}>
-                                {t('close')}
-                            </button>
-                            <button className="btn btn-primary" onClick={() => printReceipt(selectedOpForReceipt, settings)}>
-                                <Printer size={18} /> {t('print')}
-                            </button>
+                        <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
+                            <h3 style={{ fontSize: 'var(--fs-h3)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Coins size={20} className="text-accent" /> {t('addTransaction')}
+                            </h3>
+                            <form onSubmit={handleDirectTxSubmit}>
+                                <div className="settings-button-grid" style={{ marginBottom: '1rem' }}>
+                                    <div className="form-group"><label style={{ fontSize: 'var(--fs-sm)' }}>{t('amount')}</label><input type="text" required value={directTx.amount} onChange={(e) => setDirectTx({ ...directTx, amount: e.target.value.replace(/[^0-9]/g, '') })} placeholder="0" /></div>
+                                    <div className="form-group"><label style={{ fontSize: 'var(--fs-sm)' }}>{t('status')}</label><select value={directTx.type} onChange={(e) => setDirectTx({ ...directTx, type: e.target.value })} style={{ cursor: 'pointer' }}><option value="payment">{t('payment')}</option><option value="debt">{t('debt')}</option></select></div>
+                                </div>
+                                <div className="form-group"><label style={{ fontSize: 'var(--fs-sm)' }}>{t('notes')}</label><input type="text" value={directTx.note} onChange={(e) => setDirectTx({ ...directTx, note: e.target.value })} placeholder={t('notes')} /></div>
+                                <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', borderRadius: 'var(--radius-md)' }}>{t('save')}</button>
+                            </form>
                         </div>
-                    </div>
-                </div>
-            )}
+                    </>
+                )}
+            </Modal>
+
+
+            {/* Receipt Modal */}
+            <ReceiptModal
+                show={showReceiptModal}
+                onClose={() => setShowReceiptModal(false)}
+                operation={selectedOpForReceipt}
+            />
         </div>
     );
 };

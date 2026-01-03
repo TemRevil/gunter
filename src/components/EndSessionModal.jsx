@@ -81,7 +81,12 @@ const EndSessionModal = ({ isOpen, onClose, onFinish, sessionDate }) => {
         link.download = `backup_${targetDate}.txt`;
         link.click();
 
-        printEndSessionReport(currentExpected, parseFloat(actualAmount) || 0, diff, settings);
+        // Re-filter operations for the report
+        const opsForReport = (operations || []).filter(op =>
+            op.timestamp && typeof op.timestamp === 'string' && op.timestamp.startsWith(targetDate)
+        );
+
+        printEndSessionReport(currentExpected, parseFloat(actualAmount) || 0, diff, settings, opsForReport);
 
         onFinish();
     };
