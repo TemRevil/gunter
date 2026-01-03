@@ -12,7 +12,7 @@ import EndSessionModal from './components/EndSessionModal';
 import Toast from './components/Toast';
 import ConfirmDialog from './components/ConfirmDialog';
 import AdminAuthModal from './components/AdminAuthModal';
-import { Menu, Download } from 'lucide-react';
+import { Menu, Download, Loader, WifiOff } from 'lucide-react';
 
 function App() {
     const {
@@ -26,6 +26,18 @@ function App() {
     const [isMobileShow, setIsMobileShow] = useState(false);
     const [isEndSessionOpen, setIsEndSessionOpen] = useState(false);
     const [enforcedSessionDate, setEnforcedSessionDate] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Initial License Check Loader
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsLoading(false);
+            if (!isLicensed() && !navigator.onLine) {
+                window.showToast?.(settings.language === 'ar' ? 'لا يوجد اتصال بالإنترنت' : 'No Internet Connection', 'danger');
+            }
+        }, 2000);
+        return () => clearTimeout(timer);
+    }, []);
 
     useEffect(() => {
         document.documentElement.lang = settings.language || 'ar';
@@ -113,6 +125,22 @@ function App() {
         setCurrentTab(tab);
         setIsMobileShow(false);
     };
+
+    if (isLoading) {
+        return (
+            <div key={settings.theme} data-theme={settings.theme} style={{
+                height: '100vh', width: '100vw',
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                background: 'var(--bg-body)', color: 'var(--text-primary)'
+            }}>
+                <Loader size={48} className="spin" style={{ color: 'var(--accent-color)' }} />
+                <h3 style={{ marginTop: '1rem', fontWeight: 700 }}>
+                    {settings.language === 'ar' ? 'جاري التحقق من الترخيص...' : 'Checking License...'}
+                </h3>
+            </div>
+        );
+    }
 
     return (
         <div key={settings.theme} data-theme={settings.theme}>

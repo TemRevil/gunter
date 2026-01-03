@@ -10,7 +10,8 @@ const log = require('electron-log');
 
 log.transports.file.resolvePath = () => path.join(app.getPath('userData'), 'logs', 'main.log');
 autoUpdater.logger = log;
-autoUpdater.autoDownload = true; // Automatically start download when update is found
+autoUpdater.autoDownload = true;
+autoUpdater.requestHeaders = { 'Cache-Control': 'no-cache' }; // Force fresh check
 
 function createWindow() {
     const isDev = !app.isPackaged;
