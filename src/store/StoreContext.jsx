@@ -693,7 +693,7 @@ export const StoreProvider = ({ children }) => {
                 console.log('⏳ [Update Check] Waiting for response (30s timeout)...');
 
                 const res = await Promise.race([updatePromise, timeoutPromise]);
-                console.log('✅ [Update Check] Response received:', res);
+                console.log('✅ [Update Check] Raw Update Response:', JSON.stringify(res, null, 2));
 
                 if (manual) {
                     const currentVersion = await window.electron.getAppVersion();
@@ -701,10 +701,10 @@ export const StoreProvider = ({ children }) => {
 
                     if (res?.updateInfo?.version && res.updateInfo.version === currentVersion) {
                         console.log('✅ [Update Check] Already up to date');
-                        addNotification(translations[data.settings.language].upToDate.replace('%v', currentVersion), 'success');
+                        addNotification(translations[data.settings.language].upToDate.replace('%v', 'v' + currentVersion), 'success');
                     } else if (!res?.updateInfo) {
                         console.log('✅ [Update Check] No update available');
-                        addNotification(translations[data.settings.language].upToDate.replace('%v', currentVersion), 'success');
+                        addNotification(translations[data.settings.language].upToDate.replace('%v', 'v' + currentVersion), 'success');
                     }
                 }
 

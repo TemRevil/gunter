@@ -194,7 +194,10 @@ const Settings = () => {
                         url: rel.assets.find(a => a.name.endsWith('.exe'))?.browser_download_url || rel.html_url
                     }));
                     setReleases(fetchedReleases);
-                    if (fetchedReleases.length > 0) setSelectedVersion(fetchedReleases[0].version);
+                    if (fetchedReleases.length > 0) {
+                        const current = fetchedReleases.find(r => r.version === appVersion);
+                        setSelectedVersion(current ? current.version : fetchedReleases[0].version);
+                    }
                 }
             } catch (err) {
                 console.error("Failed to fetch releases:", err);
@@ -469,7 +472,7 @@ const Settings = () => {
                                             >
                                                 {releases.map(rel => (
                                                     <option key={rel.version} value={rel.version}>
-                                                        v{rel.version} ({rel.date}) {rel.version === appVersion ? `[${t('current')}]` : ''}
+                                                        v{rel.version} ({rel.date}) {rel.version === appVersion ? `[${t('current') || 'Current'}]` : ''}
                                                     </option>
                                                 ))}
                                             </select>
