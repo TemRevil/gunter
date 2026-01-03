@@ -10,6 +10,7 @@ import Modal from '../components/Modal';
 import DropdownMenu from '../components/DropdownMenu';
 import ReceiptModal from '../components/ReceiptModal';
 import { printReceipt, generateReceiptHtml, printCustomerDebts } from '../utils/printing';
+import { generateId } from '../utils/database';
 import CustomerForm from '../components/CustomerForm';
 import PartForm from '../components/PartForm';
 import CustomDatePicker from '../components/CustomDatePicker';
@@ -251,6 +252,7 @@ const Operations = () => {
         price: '0', // total price
         paidAmount: '0',
         paymentStatus: 'paid',
+        applyCredit: true, // Default to true
         extraInputs: (settings.extraReceiptInputs || []).map(inp => ({ ...inp, value: '' }))
     };
 
@@ -286,7 +288,7 @@ const Operations = () => {
 
         // Auto-apply credit if customer has negative balance (owed money)
         // Only applies for new operations, not edits (to avoid confusion or double application)
-        if (selectedCustomer && selectedCustomer.balance < 0 && !isEditMode) {
+        if (selectedCustomer && selectedCustomer.balance < 0 && !isEditMode && formData.applyCredit) {
             const availableCredit = Math.abs(selectedCustomer.balance);
             creditDeduction = Math.min(availableCredit, finalTotal);
         }
@@ -300,7 +302,7 @@ const Operations = () => {
             // Only auto-update paid amount if it matches the total (assuming full payment intent)
             paidAmount: prev.paymentStatus === 'paid' ? String(finalTotal) : prev.paidAmount
         }));
-    }, [formData.items, discount, discountType, formData.paymentStatus, selectedCustomer, isEditMode]);
+    }, [formData.items, discount, discountType, formData.paymentStatus, selectedCustomer, isEditMode, formData.applyCredit]);
 
 
 
@@ -678,31 +680,24 @@ const Operations = () => {
             else if (creditUsed > available) creditUsed = available;
         }
 
-        if (creditUsed > 0 && !isEditMode) {
-            // 1. Record the usage of credit with NEW SIMPLE ID reference
-            // Generate a simple 8-digit ID for the operation to be readable
-            const simpleOpId = Math.floor(10000000 + Math.random() * 90000000).toString();
+        // 1. Determine the Operation ID upfront
+        let opId = isEditMode ? editingOpId : generateId('op');
 
+        if (creditUsed > 0 && !isEditMode) {
             recordDirectTransaction(
                 finalCustomerId,
                 String(creditUsed),
                 'debt',
-                // Use the simple ID in the note
-                `${t('creditUsedForOp') || 'Credit used for Purchase'} #${simpleOpId}`
+                `${t('creditUsedForOp') || 'Credit used for Purchase'} #${opId ? String(opId).replace(/[^0-9]/g, '').slice(0, 8) : '---'}`,
+                opId
             );
 
-            // Note: finalTotal is already reduced in formData.price. 
-            // We do NOT subtract it again.
-
             window.showToast?.(`${t('creditUsed') || 'Credit Applied'}: ${creditUsed.toLocaleString()}`, 'info');
-
-            // Assign the simple ID to the operation data
-            var preGeneratedId = simpleOpId;
         }
 
         const opData = {
             ...formData,
-            id: preGeneratedId || undefined, // Use the pre-generated ID if available
+            id: opId,
             customerId: finalCustomerId,
             customerName: formData.customerName.trim(),
             price: finalTotal, // Adjusted price
@@ -1125,18 +1120,34 @@ const Operations = () => {
                                             <span>{parseFloat(formData.price || 0).toLocaleString()} <small>{settings.currency || '$'}</small></span>
                                         </div>
 
-                                        {formData.creditUsed > 0 && (
+                                        {selectedCustomer && selectedCustomer.balance < 0 && !isEditMode && (
                                             <div style={{
-                                                fontSize: '0.9rem',
-                                                color: 'var(--success-color)',
-                                                fontWeight: 600,
-                                                marginTop: '4px',
-                                                padding: '4px 8px',
-                                                background: 'rgba(16, 185, 129, 0.1)',
-                                                borderRadius: '4px',
-                                                display: 'inline-block'
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.6rem',
+                                                marginTop: '0.5rem',
+                                                padding: '0.5rem',
+                                                background: formData.applyCredit ? 'rgba(16, 185, 129, 0.08)' : 'rgba(100, 116, 139, 0.08)',
+                                                borderRadius: '6px',
+                                                border: '1px solid ' + (formData.applyCredit ? 'rgba(16, 185, 129, 0.2)' : 'rgba(100, 116, 139, 0.2)')
                                             }}>
-                                                {t('creditUsed') || 'Credit Used'}: -{parseFloat(formData.creditUsed).toLocaleString()}
+                                                <input
+                                                    type="checkbox"
+                                                    id="apply-credit-check"
+                                                    checked={formData.applyCredit}
+                                                    onChange={(e) => setFormData(prev => ({ ...prev, applyCredit: e.target.checked }))}
+                                                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                                />
+                                                <label htmlFor="apply-credit-check" style={{
+                                                    fontSize: '0.85rem',
+                                                    fontWeight: 600,
+                                                    color: formData.applyCredit ? 'var(--success-color)' : 'var(--text-secondary)',
+                                                    cursor: 'pointer',
+                                                    margin: 0
+                                                }}>
+                                                    {t('useCustomerCredit') || 'Apply Customer Credit'}
+                                                    {formData.creditUsed > 0 && ` (-${parseFloat(formData.creditUsed).toLocaleString()})`}
+                                                </label>
                                             </div>
                                         )}
 

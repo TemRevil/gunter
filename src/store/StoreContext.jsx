@@ -488,25 +488,37 @@ export const StoreProvider = ({ children }) => {
             });
 
             const updatedParts = prev.parts.map(p => {
-                const item = items.find(i => i.partId === p.id);
-                if (item) {
-                    return { ...p, quantity: (p.quantity || 0) + (item.quantity || 1) };
+                const opQty = items
+                    .filter(it => it.partId === p.id)
+                    .reduce((acc, it) => acc + (parseInt(it.quantity) || 0), 0);
+
+                if (opQty > 0) {
+                    return { ...p, quantity: (p.quantity || 0) + opQty };
                 }
                 return p;
             });
 
-            // Reverse balance change
+            // Reverse balance change from the operation itself
             const total = op.price;
             const paid = op.paidAmount || 0;
-            const balanceChange = (op.paymentStatus === 'paid') ? 0 : (total - paid);
+            const opBalanceChange = (op.paymentStatus === 'paid') ? 0 : (total - paid);
+
+            // Reverse balance change from linked transactions (e.g. credit used)
+            const linkedTxs = (prev.transactions || []).filter(tx => tx.operationId === id);
+            const txBalanceChange = linkedTxs.reduce((acc, tx) => {
+                // If tx was 'payment' (credit increase/debt pay), balance decreased. Reverse by adding back.
+                // If tx was 'debt' (credit usage), balance increased. Reverse by subtracting.
+                return acc + (tx.type === 'payment' ? -tx.amount : tx.amount);
+            }, 0);
 
             const updatedCustomers = prev.customers.map(c =>
-                c.id === op.customerId ? { ...c, balance: (c.balance || 0) - balanceChange } : c
+                c.id === op.customerId ? { ...c, balance: (c.balance || 0) - opBalanceChange - txBalanceChange } : c
             );
 
             return {
                 ...prev,
                 operations: prev.operations.filter(o => o.id !== id),
+                transactions: (prev.transactions || []).filter(t => t.operationId !== id),
                 parts: updatedParts,
                 customers: updatedCustomers
             };
@@ -559,7 +571,7 @@ export const StoreProvider = ({ children }) => {
         }));
     };
 
-    const recordDirectTransaction = (customerId, amount, type, note) => {
+    const recordDirectTransaction = (customerId, amount, type, note, operationId = null) => {
         if (!customerId) {
             console.warn('recordDirectTransaction called without customerId - aborting to prevent applying to all customers');
             return;
@@ -570,6 +582,7 @@ export const StoreProvider = ({ children }) => {
             amount: parseFloat(amount) || 0,
             type, // 'payment' (customer paid me) or 'debt' (customer took debt)
             note,
+            operationId,
             timestamp: new Date().toISOString()
         };
 

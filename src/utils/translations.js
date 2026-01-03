@@ -264,6 +264,7 @@ export const translations = {
         creditUsedForOp: 'تم استخدام الرصيد للشراء',
         noItemsFound: 'لا توجد أصناف',
         receiptNumber: 'رقم الفاتورة',
+        useCustomerCredit: 'استخدام الرصيد المتاح للعميل',
     },
     en: {
         appName: 'Gunter',
@@ -536,5 +537,6 @@ export const translations = {
         creditUsedForOp: 'Credit used for Purchase',
         noItemsFound: 'No Items Found',
         receiptNumber: 'Receipt #',
+        useCustomerCredit: 'Apply Customer Credit',
     }
 };
