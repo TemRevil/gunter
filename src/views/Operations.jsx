@@ -146,9 +146,9 @@ const CustomAutocomplete = ({ label, items, value, onSelect, onAddNew, placehold
 const Operations = () => {
     const {
         operations, parts, customers, transactions,
-        addOperation, updateOperation, deleteOperation, settings,
+        addOperation, updateOperation, deleteOperation, refundOperation, settings,
         addCustomer, addPart, t,
-        recordDirectTransaction, deleteTransaction
+        recordDirectTransaction, deleteTransaction, data
     } = useContext(StoreContext);
 
     const getLocalDateString = () => {
@@ -199,6 +199,13 @@ const Operations = () => {
                     setIsEditMode(false);
                     setShowModal(true);
                 }
+            }
+            if (e.key === 'Escape' && showModal) {
+                // If a sweetalert or confirm dialog is open, let it handle ESC
+                if (document.querySelector('.swal-overlay') || document.querySelector('.swal2-container')) {
+                    return;
+                }
+                setShowModal(false);
             }
         };
         window.addEventListener('keydown', handleKeyPress);
@@ -825,127 +832,202 @@ const Operations = () => {
                     </thead>
                     <tbody>
                         {filteredOps.length > 0 ? (
-                            filteredOps.map(op => (
-                                <tr
-                                    key={op.id}
-                                    onClick={() => {
-                                        setSelectedOpForReceipt(op);
-                                        setShowReceiptModal(true);
-                                        setSelectedOpId(op.id);
-                                    }}
-                                    style={{
-                                        cursor: 'pointer',
-                                        background: selectedOpId === op.id ? 'rgba(59, 130, 246, 0.08)' : undefined,
-                                        borderLeft: selectedOpId === op.id ? '4px solid var(--primary-color)' : undefined
-                                    }}
-                                >
-                                    <td>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <Clock size={14} style={{ color: 'var(--accent-color)' }} />
-                                                <span dir="ltr" style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text-primary)' }}>
-                                                    {new Date(op.timestamp).toLocaleTimeString(settings.language === 'ar' ? 'ar-EG' : 'en-US', {
-                                                        hour: '2-digit', minute: '2-digit', hour12: true
-                                                    })}
-                                                </span>
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingLeft: '1.2rem' }}>
-                                                <span dir="ltr" style={{ fontSize: 'var(--fs-xs)', opacity: 0.7 }}>
-                                                    {new Date(op.timestamp).toLocaleDateString(settings.language === 'ar' ? 'ar-EG' : 'en-US', {
-                                                        year: 'numeric', month: '2-digit', day: '2-digit'
-                                                    })}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="font-medium">{op.customerName}</td>
-                                    <td>
-                                        {op.items ? (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
-                                                {op.items.map((item, idx) => (
-                                                    <span key={idx} style={{ fontSize: '0.85em' }}>
-                                                        {item.partName} {op.items.length > 1 && `(${item.quantity})`}
+                            filteredOps.map((op, index) => {
+                                const nextOp = filteredOps[index + 1];
+                                let showDivider = false;
+
+                                // Check if we should show a session divider after this operation (if it's not the last one)
+                                // We check if there's a checkpoint strictly BETWEEN op (current) and nextOp (older).
+                                // Current op is NEWER than Next op (descending order).
+                                if (nextOp && data.sessionCheckpoints) {
+                                    // Find any checkpoint stored for today that falls between nextOp.timestamp and op.timestamp
+                                    const hasCheckpointBetween = data.sessionCheckpoints.some(cp =>
+                                        cp > nextOp.timestamp && cp <= op.timestamp
+                                    );
+                                    if (hasCheckpointBetween) showDivider = true;
+                                }
+
+                                return (
+                                    <React.Fragment key={op.id}>
+                                        <tr
+                                            onClick={() => {
+                                                setSelectedOpForReceipt(op);
+                                                setShowReceiptModal(true);
+                                                setSelectedOpId(op.id);
+                                            }}
+                                            style={{
+                                                cursor: 'pointer',
+                                                background: selectedOpId === op.id ? 'rgba(59, 130, 246, 0.08)' : undefined,
+                                                borderLeft: selectedOpId === op.id ? '4px solid var(--primary-color)' : undefined
+                                            }}
+                                        >
+                                            <td>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <Clock size={14} style={{ color: 'var(--accent-color)' }} />
+                                                        <span dir="ltr" style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                                            {new Date(op.timestamp).toLocaleTimeString(settings.language === 'ar' ? 'ar-EG' : 'en-US', {
+                                                                hour: '2-digit', minute: '2-digit', hour12: true
+                                                            })}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingLeft: '1.2rem' }}>
+                                                        <span dir="ltr" style={{ fontSize: 'var(--fs-xs)', opacity: 0.7 }}>
+                                                            {new Date(op.timestamp).toLocaleDateString(settings.language === 'ar' ? 'ar-EG' : 'en-US', {
+                                                                year: 'numeric', month: '2-digit', day: '2-digit'
+                                                            })}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="font-medium">{op.customerName}</td>
+                                            <td>
+                                                {op.items ? (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                                                        {op.items.map((item, idx) => (
+                                                            <span key={idx} style={{ fontSize: '0.85em' }}>
+                                                                {item.partName} {op.items.length > 1 && `(${item.quantity})`}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                ) : op.partName}
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                {op.items ? op.items.reduce((acc, curr) => acc + curr.quantity, 0) : op.quantity}
+                                            </td>
+                                            <td className="font-medium" style={{ textAlign: 'center' }}>{op.price.toLocaleString()}</td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                {op.refunded ? (
+                                                    <span className="badge" style={{
+                                                        background: 'rgba(139, 92, 246, 0.15)',
+                                                        color: 'rgb(139, 92, 246)',
+                                                        border: '1px solid rgba(139, 92, 246, 0.3)'
+                                                    }}>
+                                                        <History size={12} strokeWidth={3} /> {t('refunded')}
                                                     </span>
-                                                ))}
-                                            </div>
-                                        ) : op.partName}
-                                    </td>
-                                    <td style={{ textAlign: 'center' }}>
-                                        {op.items ? op.items.reduce((acc, curr) => acc + curr.quantity, 0) : op.quantity}
-                                    </td>
-                                    <td className="font-medium" style={{ textAlign: 'center' }}>{op.price.toLocaleString()}</td>
-                                    <td style={{ textAlign: 'center' }}>
-                                        {op.paymentStatus === 'paid' ? (
-                                            <span className="badge success">
-                                                <CheckCircle2 size={12} strokeWidth={3} /> {t('fullyPaid')}
-                                            </span>
-                                        ) : op.paymentStatus === 'partial' ? (
-                                            <span className="badge warning">
-                                                <Clock size={12} strokeWidth={3} /> {t('partial')}
-                                            </span>
-                                        ) : (
-                                            <span className="badge danger">
-                                                <AlertCircle size={12} strokeWidth={3} /> {t('debt')}
-                                            </span>
+                                                ) : op.paymentStatus === 'paid' ? (
+                                                    <span className="badge success">
+                                                        <CheckCircle2 size={12} strokeWidth={3} /> {t('fullyPaid')}
+                                                    </span>
+                                                ) : op.paymentStatus === 'partial' ? (
+                                                    <span className="badge warning">
+                                                        <Clock size={12} strokeWidth={3} /> {t('partial')}
+                                                    </span>
+                                                ) : (
+                                                    <span className="badge danger">
+                                                        <AlertCircle size={12} strokeWidth={3} /> {t('debt')}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td onClick={(e) => e.stopPropagation()}>
+                                                <DropdownMenu options={[
+                                                    {
+                                                        label: t('viewReceipt'),
+                                                        icon: <Package size={16} />,
+                                                        onClick: () => {
+                                                            setSelectedOpForReceipt(op);
+                                                            setShowReceiptModal(true);
+                                                            setSelectedOpId(op.id);
+                                                        }
+                                                    },
+                                                    {
+                                                        label: t('print'),
+                                                        icon: <Printer size={16} />,
+                                                        onClick: () => printReceipt(op, settings)
+                                                    },
+                                                    {
+                                                        label: t('edit'),
+                                                        icon: <Edit2 size={16} />,
+                                                        disabled: op.refunded,
+                                                        onClick: () => {
+                                                            if (op.refunded) {
+                                                                window.showToast?.(t('refunded'), 'warning');
+                                                                return;
+                                                            }
+
+                                                            const opDate = op.timestamp.split('T')[0];
+                                                            const today = getLocalDateString();
+
+                                                            if (opDate !== today) {
+                                                                window.showToast?.(t('editRestricted'), 'warning');
+                                                                return;
+                                                            }
+
+                                                            const performEdit = () => openEditModal(op);
+                                                            if (settings?.security?.authOnEditOperation) {
+                                                                window.requestAdminAuth?.(performEdit, t('identityConfirmEditOp'));
+                                                            } else {
+                                                                performEdit();
+                                                            }
+                                                        }
+                                                    },
+                                                    {
+                                                        label: t('refund'),
+                                                        icon: <History size={16} />,
+                                                        className: 'warning',
+                                                        disabled: op.refunded,
+                                                        onClick: () => {
+                                                            if (op.refunded) {
+                                                                window.showToast?.(t('refunded'), 'warning');
+                                                                return;
+                                                            }
+
+                                                            const performRefund = () => {
+                                                                window.customConfirm?.(t('refund'), t('refundConfirm'), () => {
+                                                                    refundOperation(op.id);
+                                                                    window.showToast?.(t('refunded'), 'success');
+                                                                    // Trigger print for refund
+                                                                    setTimeout(() => {
+                                                                        printReceipt({ ...op, refunded: true }, settings);
+                                                                    }, 500);
+                                                                });
+                                                            };
+                                                            if (settings?.security?.authOnRefundOperation) {
+                                                                window.requestAdminAuth?.(performRefund, t('identityConfirmRefundOp'));
+                                                            } else {
+                                                                performRefund();
+                                                            }
+                                                        }
+                                                    },
+                                                    {
+                                                        label: t('delete'),
+                                                        icon: <Trash2 size={16} />,
+                                                        ClassName: 'danger',
+                                                        disabled: op.refunded,
+                                                        onClick: () => {
+                                                            if (op.refunded) {
+                                                                window.showToast?.(t('refunded'), 'warning');
+                                                                return;
+                                                            }
+
+                                                            const performDelete = () => {
+                                                                window.customConfirm?.(t('delete'), t('deleteOperationConfirm'), () => {
+                                                                    deleteOperation(op.id);
+                                                                    window.showToast?.(t('delete'), 'success');
+                                                                });
+                                                            };
+                                                            if (settings?.security?.authOnDeleteOperation) {
+                                                                window.requestAdminAuth?.(performDelete, t('identityConfirmDeleteOp'));
+                                                            } else {
+                                                                performDelete();
+                                                            }
+                                                        }
+                                                    }
+                                                ]} />
+                                            </td>
+                                        </tr>
+                                        {showDivider && (
+                                            <tr key={`divider-${op.id}`} style={{ background: '#f8f9fa' }}>
+                                                <td colSpan="7" style={{ textAlign: 'center', padding: '0.4rem', color: 'var(--text-secondary)', borderTop: '2px dashed var(--border-color)', borderBottom: '2px dashed var(--border-color)', fontSize: '0.85rem' }}>
+                                                    <span style={{ background: 'var(--bg-surface)', padding: '0 10px', fontWeight: 600 }}>
+                                                        --- {t('sessionEnded') || 'End of Session'} ---
+                                                    </span>
+                                                </td>
+                                            </tr>
                                         )}
-                                    </td>
-                                    <td onClick={(e) => e.stopPropagation()}>
-                                        <DropdownMenu options={[
-                                            {
-                                                label: t('viewReceipt'),
-                                                icon: <Package size={16} />,
-                                                onClick: () => {
-                                                    setSelectedOpForReceipt(op);
-                                                    setShowReceiptModal(true);
-                                                }
-                                            },
-                                            {
-                                                label: t('print'),
-                                                icon: <Printer size={16} />,
-                                                onClick: () => printReceipt(op, settings)
-                                            },
-                                            {
-                                                label: t('edit'),
-                                                icon: <Edit2 size={16} />,
-                                                onClick: () => {
-                                                    const opDate = op.timestamp.split('T')[0];
-                                                    const today = getLocalDateString();
-
-                                                    if (opDate !== today) {
-                                                        window.showToast?.(t('editRestricted'), 'warning');
-                                                        return;
-                                                    }
-
-                                                    const performEdit = () => openEditModal(op);
-                                                    if (settings?.security?.authOnEditOperation) {
-                                                        window.requestAdminAuth?.(performEdit, t('identityConfirmEditOp'));
-                                                    } else {
-                                                        performEdit();
-                                                    }
-                                                }
-                                            },
-                                            {
-                                                label: t('delete'),
-                                                icon: <Trash2 size={16} />,
-                                                className: 'danger',
-                                                onClick: () => {
-                                                    const performDelete = () => {
-                                                        window.customConfirm?.(t('delete'), t('deleteOperationConfirm'), () => {
-                                                            deleteOperation(op.id);
-                                                            window.showToast?.(t('delete'), 'success');
-                                                        });
-                                                    };
-                                                    if (settings?.security?.authOnDeleteOperation) {
-                                                        window.requestAdminAuth?.(performDelete, t('identityConfirmDeleteOp'));
-                                                    } else {
-                                                        performDelete();
-                                                    }
-                                                }
-                                            }
-                                        ]} />
-                                    </td>
-                                </tr>
-                            ))
+                                    </React.Fragment>
+                                );
+                            })
                         ) : (
                             <tr>
                                 <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>

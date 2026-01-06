@@ -537,6 +537,101 @@ export const StoreProvider = ({ children }) => {
         }
     };
 
+    const refundOperation = (id) => {
+        const opDetail = data.operations.find(o => o.id === id);
+        const t = translations[data.settings.language || 'en'];
+
+        setData(prev => {
+            const op = prev.operations.find(o => o.id === id);
+            if (!op) return prev;
+
+            // Prevent refunding already refunded operations
+            if (op.refunded) {
+                return prev;
+            }
+
+            const itemsRaw = op.items || [{ partId: op.partId, partName: op.partName, quantity: op.quantity }];
+            const items = itemsRaw.map(it => {
+                const qty = parseInt(it.quantity) || 1;
+                let partId = it.partId;
+                if (!partId && it.partName) {
+                    const match = prev.parts.find(p => p.name && p.name.toLowerCase() === (it.partName || '').toLowerCase());
+                    if (match) partId = match.id;
+                }
+                return { ...it, quantity: qty, partId };
+            });
+
+            // Return parts to stock
+            const updatedParts = prev.parts.map(p => {
+                const opQty = items
+                    .filter(it => it.partId === p.id)
+                    .reduce((acc, it) => acc + (parseInt(it.quantity) || 0), 0);
+
+                if (opQty > 0) {
+                    return { ...p, quantity: (p.quantity || 0) + opQty };
+                }
+                return p;
+            });
+
+            // Calculate refund amount (the amount that was paid)
+            const refundAmount = parseFloat(op.paidAmount) || 0;
+
+            // Mark operation as refunded
+            const updatedOperations = prev.operations.map(o =>
+                o.id === id ? { ...o, refunded: true } : o
+            );
+
+            // Record refund transaction if customer paid anything
+            let updatedTransactions = prev.transactions || [];
+            if (refundAmount > 0 && op.customerId) {
+                const refundTx = {
+                    id: generateId('tx'),
+                    customerId: op.customerId,
+                    amount: refundAmount,
+                    type: 'debt', // 'debt' type reduces the Safe balance (Cash Out)
+                    note: `${t.refund || 'Refund'} - ${t.receiptNumber || 'Receipt #'} ${String(id).replace(/[^0-9]/g, '').slice(0, 8)}`,
+                    timestamp: new Date().toISOString(),
+                    operationId: id
+                };
+                updatedTransactions = [...updatedTransactions, refundTx];
+            }
+
+            // Update customer balance
+            // Logic: 
+            // 1. Customer returned items: We owe him Full Price via Credit (-op.price)
+            // 2. We gave him Cash: He owes us that Cash via Debit (+refundAmount)
+            // Net Balance Change = refundAmount - op.price
+            // Since refundAmount is op.paidAmount, Change = paid - price = -(price - paid) = -UnpaidAmount
+            // So we reduce the balance by the amount that was NOT paid (clearing the debt).
+            // If fully paid, change is 0.
+            const balanceChange = (parseFloat(op.price) || 0) - refundAmount; // This is the unpaid amount
+
+            const updatedCustomers = prev.customers.map(c =>
+                c.id === op.customerId ? { ...c, balance: (c.balance || 0) - balanceChange } : c
+            );
+
+            return {
+                ...prev,
+                operations: updatedOperations,
+                parts: updatedParts,
+                customers: updatedCustomers,
+                transactions: updatedTransactions
+            };
+        });
+
+        if (opDetail) {
+            const partDisplayName = opDetail.items && opDetail.items.length > 0
+                ? opDetail.items.map(i => i.partName).join(', ')
+                : (opDetail.partName || '-');
+            const msg = (t.operationRefunded || 'Operation Refunded: %p for %c')
+                .replace('%p', partDisplayName)
+                .replace('%c', opDetail.customerName || '-');
+            addNotification(msg, 'success');
+        } else {
+            addNotification(t.refunded || 'Refunded', 'success');
+        }
+    };
+
     const addPart = (part) => {
         const newPart = {
             ...part,
@@ -644,9 +739,23 @@ export const StoreProvider = ({ children }) => {
     const getDailyCollectedTotal = () => {
         const todayStr = new Date().toISOString().split('T')[0];
 
+        // Find last session checkpoint for today
+        const todayCheckpoints = (data.sessionCheckpoints || [])
+            .filter(cp => cp.startsWith(todayStr))
+            .sort();
+        const lastCheckpoint = todayCheckpoints.length > 0 ? todayCheckpoints[todayCheckpoints.length - 1] : null;
+
+        // Helper to check if item is in current session (after last checkpoint)
+        const inCurrentSession = (timestamp) => {
+            if (!timestamp) return false;
+            if (!timestamp.startsWith(todayStr)) return false;
+            if (!lastCheckpoint) return true; // No checkpoints today, so everything today is current
+            return timestamp > lastCheckpoint;
+        };
+
         // 1. Paid amounts from operations today (Cash IN)
         const opsTotal = (data.operations || []).reduce((acc, op) => {
-            if (op.timestamp && op.timestamp.startsWith(todayStr)) {
+            if (inCurrentSession(op.timestamp)) {
                 return acc + (parseFloat(op.paidAmount) || 0);
             }
             return acc;
@@ -654,7 +763,7 @@ export const StoreProvider = ({ children }) => {
 
         // 2. Direct transactions today (Cash IN / OUT)
         const txTotal = (data.transactions || []).reduce((acc, tx) => {
-            if (tx.timestamp && tx.timestamp.startsWith(todayStr)) {
+            if (inCurrentSession(tx.timestamp)) {
                 if (tx.type === 'payment') {
                     return acc + (parseFloat(tx.amount) || 0); // Customer paid the shop
                 } else if (tx.type === 'debt') {
@@ -665,6 +774,17 @@ export const StoreProvider = ({ children }) => {
         }, 0);
 
         return opsTotal + txTotal;
+    };
+
+    // ... (exportData, importData etc)
+
+    const finishSession = () => {
+        const now = new Date().toISOString();
+        setData(prev => ({
+            ...prev,
+            // We don't clear activeSessionDate, we just mark a checkpoint
+            sessionCheckpoints: [...(prev.sessionCheckpoints || []), now]
+        }));
     };
 
     const exportData = () => {
@@ -966,6 +1086,7 @@ export const StoreProvider = ({ children }) => {
         addOperation,
         updateOperation,
         deleteOperation,
+        refundOperation,
         addPart,
         updatePart,
         deletePart,
@@ -988,7 +1109,7 @@ export const StoreProvider = ({ children }) => {
         downloadRollback: window._gunterDownloadRollback,
         installUpdate: window._gunterInstallUpdate,
         clearUpdateState: window._gunterClearUpdateState,
-        finishSession: () => setData(prev => ({ ...prev, activeSessionDate: null })),
+        finishSession,
         activeSessionDate: data.activeSessionDate,
         licenseData,
         checkLicenseConnection: validateCurrentLicense,

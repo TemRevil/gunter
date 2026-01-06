@@ -516,6 +516,7 @@ const Settings = () => {
                                 <SecurityCheckbox label={t('deleteOperations')} settingKey="authOnDeleteOperation" />
                                 <SecurityCheckbox label={t('addOperations')} settingKey="authOnAddOperation" />
                                 <SecurityCheckbox label={t('authOnEditOperation')} settingKey="authOnEditOperation" />
+                                <SecurityCheckbox label={t('authOnRefundOperation')} settingKey="authOnRefundOperation" />
                                 <SecurityCheckbox label={settings.language === 'ar' ? 'السماح بتعديل السعر' : 'Allow Price Edit'} settingKey="allowPriceEdit" subtext={settings.language === 'ar' ? 'السماح بتغيير السعر في نافذة البيع' : 'Allow changing item price in sales window'} />
                                 <SecurityCheckbox label={settings.language === 'ar' ? 'البيع في حالة عدم توفر مخزون' : 'Allow Negative Stock Sales'} settingKey="allowNegativeStock" subtext={settings.language === 'ar' ? 'إتمام العملية حتى لو الكمية غير متوفرة' : 'Complete sale even if stock is insufficient'} />
 
@@ -600,11 +601,19 @@ const Settings = () => {
                                                 onChange={(e) => updateExtraInput(inp.id, e.target.value)}
                                                 style={{ flex: 1 }}
                                             />
-                                            <button type="button" className="btn btn-ghost" onClick={() => removeExtraInput(inp.id)} style={{ color: 'var(--danger-color)' }}><Trash2 size={18} /></button>
+                                            <button type="button" className="action-btn danger" onClick={() => removeExtraInput(inp.id)}>
+                                                <X size={14} />
+                                            </button>
                                         </div>
                                     ))}
                                 </div>
                             </div>
+
+                            <div className="settings-item-row" onClick={() => setData(prev => ({ ...prev, settings: { ...prev.settings, receiptTableBorders: !settings.receiptTableBorders } }))} style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem', padding: '0.75rem' }}>
+                                <div><span className="settings-item-label">{t('receiptTableBorders')}</span></div>
+                                <div className={`toggle-switch ${settings.receiptTableBorders ? 'active' : ''}`}><div className="toggle-knob" /></div>
+                            </div>
+
                             <div style={{ display: 'flex', gap: '1rem', marginTop: '1.25rem' }}>
                                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}><Save size={16} /> {t('save')}</button>
                                 <button
@@ -623,16 +632,17 @@ const Settings = () => {
                                             price: 800,
                                             paidAmount: 500,
                                             paymentStatus: 'partial',
+                                            refunded: false,
                                             extraInputs: (settings.extraReceiptInputs || []).map(inp => ({ label: inp.label, value: settings.language === 'ar' ? 'نموذج' : 'Sample' }))
                                         };
-                                        printReceipt(mockReceipt, settings);
+                                        printReceipt(mockReceipt, { ...settings });
                                     }}
                                 >
                                     <Printer size={16} /> {t('testPrint')}
                                 </button>
                             </div>
-                        </form>
-                    </section>
+                        </form >
+                    </section >
                 );
             case 'data':
                 return (

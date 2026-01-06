@@ -71,19 +71,35 @@ export const generateReceiptHtml = (op, settings) => {
 
     return `
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;600;700;800&display=swap');
+             /* @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;600;700;800&display=swap'); */
             
+            body { margin: 0; padding: 0; }
+
             .receipt-content-wrapper { 
                 background: white; 
                 padding: 15px; 
                 width: 80mm; 
-                min-height: 120mm;
+                min-height: 120mm; /* Keep min-height for preview look */
                 margin: 0 auto; 
                 color: #000;
                 direction: ${isAr ? 'rtl' : 'ltr'};
-                font-family: ${isAr ? "'Cairo', sans-serif" : "'Inter', sans-serif"};
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0,0,0,0.05); /* Paper Shadow */
+                font-family: ${isAr ? "'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" : "'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"};
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
             }
+            .receipt-content-wrapper * { margin: 0; padding: 0; box-sizing: border-box; }
+            
+            @media print {
+                body { background-color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                .receipt-content-wrapper { 
+                    width: 100% !important; 
+                    box-shadow: none !important; 
+                    margin: 0 !important; 
+                    padding: 0 !important;
+                    min-height: auto !important;
+                }
+            }
+            
+            .receipt-header { text-align: center; margin-bottom: 12px; }
             .receipt-content-wrapper * { margin: 0; padding: 0; box-sizing: border-box; }
             
             .receipt-header { text-align: center; margin-bottom: 12px; }
@@ -119,14 +135,15 @@ export const generateReceiptHtml = (op, settings) => {
                 font-size: 0.7rem; 
                 text-transform: uppercase; 
                 border-bottom: 2px solid #000; 
-                padding: 6px 0;
+                padding: 6px ${settings.receiptTableBorders ? '4px' : '0'};
+                ${settings.receiptTableBorders ? 'border: 1px solid #000; background-color: #f8f9fa;' : ''}
                 color: #000;
                 text-align: ${isAr ? 'right' : 'left'};
             }
             .receipt-table td { 
-                padding: 8px 0; 
+                padding: 8px ${settings.receiptTableBorders ? '4px' : '0'};
                 font-size: 0.8rem; 
-                border-bottom: 1px solid #eee;
+                ${settings.receiptTableBorders ? 'border: 1px solid #000;' : 'border-bottom: 1px solid #eee;'}
                 vertical-align: middle;
             }
             
@@ -177,7 +194,7 @@ export const generateReceiptHtml = (op, settings) => {
                 <div style="font-size: 0.7rem; color: #666; margin-top: 4px;">${extraInputsHtml}</div>
             </div>
 
-            <div class="receipt-type-badge">${labels.retailReceipt}</div>
+            <div class="receipt-type-badge">${op.refunded ? (t('refund') || 'Refund') : labels.retailReceipt}</div>
 
             <div class="info-section">
                 <div class="info-row">
@@ -191,8 +208,12 @@ export const generateReceiptHtml = (op, settings) => {
                     <span><b>${t('receiptNumber')}:</b> #${op.id ? String(op.id).replace(/[^0-9]/g, '').slice(0, 8) : '---'}</span>
                 </div>
                 <div class="info-row">
-                    <span><b>${labels.status}:</b> ${paymentStatusText}</span>
+                    <span><b>${labels.status}:</b> ${op.refunded ? (t('refunded') || 'Refunded') : paymentStatusText}</span>
                 </div>
+                ${op.refunded ? `
+                <div class="info-row" style="justify-content: center; margin-top: 5px;">
+                     <span style="font-weight: 800; border: 2px solid #000; padding: 2px 8px; border-radius: 4px; font-size: 1.1em;">${t('refunded') || 'REFUNDED'}</span>
+                </div>` : ''}
             </div>
 
             <table class="receipt-table">
@@ -268,15 +289,49 @@ export const generateReceiptHtml = (op, settings) => {
 };
 
 export const printReceipt = (op, settings) => {
-    const html = generateReceiptHtml(op, settings);
-    const win = window.open('', '', 'width=800,height=900');
-    win.document.write('<html><head><title>Receipt Viewer</title></head><body>' + html + '</body></html>');
-    win.document.close();
-    win.focus();
-    setTimeout(() => {
-        win.print();
-        win.close();
-    }, 500);
+    try {
+        const safeSettings = settings || { language: 'en', receiptTableBorders: false };
+        const html = generateReceiptHtml(op, safeSettings);
+
+        // Open window with specific properties to avoid issues
+        const win = window.open('', '_blank', 'width=800,height=900,menubar=no,toolbar=no,location=no,status=no,titlebar=no');
+
+        if (!win) {
+            console.error('Print window blocked');
+            alert('Please allow popups for printing');
+            return;
+        }
+
+        win.document.open();
+        win.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Receipt Viewer</title>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="margin:20px 0; background-color:#f0f0f0;">
+                ${html}
+            </body>
+            </html>
+        `);
+        win.document.close();
+
+        // Ensure content is loaded and give it a moment to render styles
+        win.focus();
+        setTimeout(() => {
+            win.print();
+            // Optional: Close after print (commented out to let user debug if needed, or keep enabled)
+            // win.close(); 
+            // Better UX: Close only after a significant delay or don't auto-close to let user reprint
+            // For now, consistent with previous behavior but safer delay
+            setTimeout(() => win.close(), 100);
+        }, 800);
+    } catch (e) {
+        console.error('Print generation error:', e);
+        alert('Error generating receipt: ' + e.message);
+    }
 };
 
 export const printCustomerDebts = (customer, operations, settings) => {
