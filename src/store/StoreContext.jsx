@@ -10,6 +10,14 @@ const StoreContext = createContext();
 // Initialize database
 const database = new Database('mech_system_db_v3');
 
+// Helper for Firestore timeouts
+const withTimeout = (promise, ms = 3000) => {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+    ]);
+};
+
 export const StoreProvider = ({ children }) => {
     const [data, setData] = useState(database.data);
 
@@ -108,21 +116,24 @@ export const StoreProvider = ({ children }) => {
 
     useEffect(() => {
         const autoLogin = async () => {
+            let email = "gunter-v@gunter.com";
+            let password = "!@wqsdXD@#1@1";
+
             try {
                 // 1. Read credentials from Firestore /Control/E
-                // Note: For this to work initially, rules must allow unauthenticated 
-                // read on this specific path, or we use the hardcoded values if reading fails.
                 const controlRef = doc(db, "Control", "E");
-                const controlSnap = await getDoc(controlRef);
-
-                let email = "gunter-v@gunter.com";
-                let password = "!@wqsdXD@#1@1";
+                const controlSnap = await withTimeout(getDoc(controlRef), 2000);
 
                 if (controlSnap.exists()) {
                     email = controlSnap.data().Email;
                     password = controlSnap.data().Password;
                 }
+            } catch (error) {
+                console.warn("⚠️ Could not fetch remote credentials, using fallback:", error.message);
+                // Continue with fallback credentials
+            }
 
+            try {
                 // 2. Perform Sign In
                 await signInWithEmailAndPassword(auth, email, password);
                 console.log("Auto-login successful");
@@ -179,7 +190,7 @@ export const StoreProvider = ({ children }) => {
 
         try {
             const docRef = doc(db, "Activision Keys", keyToCheck.trim());
-            const docSnap = await getDoc(docRef);
+            const docSnap = await withTimeout(getDoc(docRef), 2500);
 
             if (docSnap.exists() && docSnap.data().Status === "Used") {
                 if (!code) {
@@ -198,9 +209,9 @@ export const StoreProvider = ({ children }) => {
             }
         } catch (error) {
             console.error("⚠️ License check error:", error);
-            // Network errors during validation - allow offline access
-            if (error.message?.includes('network') || error.code === 'unavailable' || error.code === 'permission-denied') {
-                console.log("🔒 Network error - allowing offline access with stored license");
+            // Network errors or timeouts during validation - allow offline access
+            if (error.message === 'timeout' || error.message?.toLowerCase().includes('network') || error.code === 'unavailable' || error.code === 'permission-denied') {
+                console.log("🔒 Connection issue - allowing offline access with stored license");
                 if (!code) setIsLicenseValid(true);
                 return true;
             } else {
