@@ -178,6 +178,36 @@ export const StoreProvider = ({ children }) => {
             return false;
         }
 
+        const SPECIAL_TRIAL_KEY = '511A3E35-9203-410D-B791-6888F1AFC8E4';
+        
+        // Handle Trial Key
+        if (keyToCheck.trim() === SPECIAL_TRIAL_KEY) {
+            if (data.settings.trialBlocked) {
+                if (!code) setIsLicenseValid(false);
+                return false;
+            }
+
+            const trialStart = data.settings.trialStart;
+            if (trialStart) {
+                const start = new Date(trialStart).getTime();
+                const now = new Date().getTime();
+                const oneHour = 60 * 60 * 1000;
+
+                if (now - start > oneHour) {
+                    console.warn("Trial license expired (1 hour limit)");
+                    setData(prev => ({
+                        ...prev,
+                        settings: { ...prev.settings, trialBlocked: true }
+                    }));
+                    if (!code) setIsLicenseValid(false);
+                    return false;
+                }
+            }
+            
+            if (!code) setIsLicenseValid(true);
+            return true;
+        }
+
         // Offline mode: Allow access if license key exists locally
         if (!navigator.onLine) {
             console.log("🔒 Offline mode detected - allowing access with stored license key");
@@ -241,8 +271,39 @@ export const StoreProvider = ({ children }) => {
     const isLicensed = () => isLicenseValid;
 
     const activateLicense = async (code, licensedToName) => {
+        const SPECIAL_TRIAL_KEY = '511A3E35-9203-410D-B791-6888F1AFC8E4';
+        const trimmedCode = code.trim();
+
+        if (trimmedCode === SPECIAL_TRIAL_KEY) {
+            if (data.settings.trialBlocked) {
+                window.showToast?.(
+                    data.settings.language === 'ar' 
+                        ? 'انتهت مدة التجربة! يرجى التواصل مع المطور للحصول على كود جديد.' 
+                        : 'Trial period expired! Please contact the developer for a new code.', 
+                    'danger'
+                );
+                return false;
+            }
+
+            const now = new Date();
+            const updateData = {
+                settings: { 
+                    ...data.settings, 
+                    license: trimmedCode,
+                    licensedTo: licensedToName || 'Trial User',
+                    trialStart: data.settings.trialStart || now.toISOString()
+                }
+            };
+
+            setData(prev => ({
+                ...prev,
+                settings: updateData.settings
+            }));
+            setIsLicenseValid(true);
+            return true;
+        }
+
         try {
-            const trimmedCode = code.trim();
             const docRef = doc(db, "Activision Keys", trimmedCode);
             const docSnap = await getDoc(docRef);
 

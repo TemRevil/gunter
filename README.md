@@ -46,6 +46,15 @@
 
 ---
 
+### 🔑 Trial Access
+
+You can test the system using the following temporary license key:
+- **Key:** `511A3E35-9203-410D-B791-6888F1AFC8E4`
+- **Limit:** 1 Hour per machine.
+- **Note:** This key can be used multiple times, but each session is limited to one hour of activity. After the hour expires, the system will be locked, and you must contact the developer for a permanent key.
+
+---
+
 ### 🛠️ Tech Stack
 
 - **Frontend:** React 18 & Vite
